@@ -21,18 +21,30 @@ class Client:
             )
             return Client.__instance
 
-def create_hit_type():
+def create_hit_type (
+    title: str,
+    keywords: str,
+    description: str,
+    reward: str,
+    duration_sec: int,
+    auto_approval_delay_sec: int
+) -> str:
 
     response = Client.get().create_hit_type(
-        AutoApprovalDelayInSeconds=216000,
-        AssignmentDurationInSeconds=300,
-        Reward='0.02',
-        Title='Draw bounding boxes around elements in scientific publications',
-        Keywords='image,bounding,box,figures,tables,captions,science,publications',
-        Description='In this task you are asked to find any figures or tables on a page and draw a bounding box around them (if there are any). Aditionally, you should draw bounding boxes around captions that explain those figures or tables.'
+        AutoApprovalDelayInSeconds=auto_approval_delay_sec,
+        AssignmentDurationInSeconds=duration_sec,
+        Reward=reward,
+        Title=title,
+        Keywords=keywords,
+        Description=description
     )
 
-    return response
+    logging.debug(f'mturk create_hit_type response: {response}')
+
+    if (response['ResponseMetadata']['HTTPStatusCode'] == 200):
+        return response['HITTypeId']
+    else:
+        raise Exception('Could not create HIT type: ' + str(response))
 
 def create_hit(type: str):
     question_xml = '''<?xml version="1.0" encoding="UTF-8"?>

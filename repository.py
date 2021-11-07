@@ -1,9 +1,12 @@
+from numpy import number
 from config import Config
 from pymongo import MongoClient, DESCENDING, ASCENDING
 import pandas
 import logging
 from enum import Enum
 from bson import ObjectId
+
+from mturk_client import Client
 
 class PageStatus(Enum):
     NOT_ANNOTATED = 'NOT_ANNOTATED'
@@ -44,3 +47,21 @@ def ingest_pdf(row: pandas.Series):
     } for page_nr in range(1, fields['page_count']+1)]
 
     DB.get().pages.insert_many(pages, ordered=False)
+
+def get_random_not_annotated(count: int) -> list[str]:
+    result = DB.get().pages\
+        .find({'status': PageStatus.NOT_ANNOTATED.value}, {'_id': 1})\
+        .limit(count)
+    result_list =  [page['_id'] for page in result]
+
+    if(len(result_list) != 0):
+        return result_list
+    else:
+        raise Exception('There are no more unpublished pages!')
+
+def save_hit_type(params: dict):
+    if(params['active']):
+        # Set all existing HIT types to inactive
+        DB.get().hit_types.update_many({}, {'$set': {'active': False}})
+    
+    DB.get().hit_types.insert_one(params)
