@@ -6,9 +6,10 @@ name = "pypi"
 [packages]
 boto3 = "*"
 python-dotenv = "*"
-pymongo = "*"
+pymongo = {extras = ["srv"], version = "*"}
 coloredlogs = "*"
 pandas = "*"
+pyarrow = "*"
 
 [dev-packages]
 

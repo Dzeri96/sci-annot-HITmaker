@@ -8,11 +8,18 @@ import mturk_client
 
 def ingest(path):
     data = pd.read_parquet(path)
+    logging.info(f'Ingesting {path} into database...')
+
+    for index, row in data.iterrows():
+        repository.ingest_pdf(row)
+    
+    logging.info(f'Finished ingesting {data.shape[0]} rows')
     
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Amazon MTurk HIT client')
     parser.add_argument('--env', '-e', nargs=1, default='.env', help='Environment file', metavar='file')
+    parser.add_argument('--ingest', '-i', nargs=1, help='Parquet file with pdf info', metavar='file')
     parser.add_argument('--verbose', '-v', help='Enable verbose logging (info, debug)', action='count')
     args = parser.parse_args()
     
@@ -28,3 +35,7 @@ if __name__ == '__main__':
     coloredlogs.install(**logging_config)
     logging.debug('DEBUG LOGGING ENABLED')
     logging.info('INFO LOGGING ENABLED')
+
+    # Handle arguments
+    if(args.ingest):
+        ingest(args.ingest[0])
