@@ -17,7 +17,32 @@ def ingest(path):
 
 def publish(count: int):
     unpublished = repository.get_random_not_annotated(count)
-    print(f'unpub: {unpublished}')
+    active_hit_type = repository.get_active_hit_type_or_by_id()
+    
+    logging.info(f'Active hit type: {active_hit_type}')
+    if str(Config.get('accept_prompts')) != 'True':
+        price = float(active_hit_type['reward']) * count
+        answer = input(f'This action will cost you {price}$. Are you sure you want to proceed? (N/y)? ')
+        if(answer != 'y'):
+            print('Cancelling action...')
+            return
+
+    page_HIT_id_map = {}
+    for page in unpublished:
+        img_url = Config.get('image_url_base') + page
+        try:
+            response = mturk_client.create_hit(active_hit_type['_id'], img_url)
+            if(response['ResponseMetadata']['HTTPStatusCode'] == 200):
+                logging.debug(f'Created hit: {response}')
+                page_HIT_id_map[page] = response['HIT']['HITId']
+            else:
+                logging.error(f'Could not create HIT. Response was: {response}')
+                break
+        except Exception as e:
+            logging.error(f'Could not create HIT. Exception was: "{e}"')
+            break
+    
+    repository.update_pages_to_submitted(page_HIT_id_map)
     
 def create_hit_type(active: bool = False):
     params = {
@@ -47,6 +72,7 @@ if __name__ == '__main__':
     parser.add_argument('--ingest', '-i', nargs=1, help='Parquet file with pdf info', metavar='file')
     parser.add_argument('--publish-random', '-p', nargs=1, help='Publish a certain number of HITs from the pool of unpublished pages', metavar='count', type=int)
     parser.add_argument('--verbose', '-v', help='Enable verbose logging (info, debug)', action='count')
+    parser.add_argument('--accept-prompts', '-y', help='Say yes to any prompts (UNSAFE)', action='store_true')
 
     args = parser.parse_args()
     
@@ -63,6 +89,10 @@ if __name__ == '__main__':
     logging.debug('DEBUG LOGGING ENABLED')
     logging.info('INFO LOGGING ENABLED')
 
+    # Check for unsafe mode
+    if(args.accept_prompts):
+        logging.warning('Accepting all prompts! This can cause unwanted money loss!')
+        Config.set('accept_prompts', True)
 
     # Handle arguments
     if(args.ingest):

@@ -7,7 +7,7 @@ class Client:
 
     @staticmethod
     def get():
-        logging.info(f'Creating a new BOTO3 MTurk client')
+        logging.debug(f'Creating a new BOTO3 MTurk client')
 
         if Client.__instance != None:
             return Client.__instance
@@ -46,18 +46,19 @@ def create_hit_type (
     else:
         raise Exception('Could not create HIT type: ' + str(response))
 
-def create_hit(type: str):
-    question_xml = '''<?xml version="1.0" encoding="UTF-8"?>
+def create_hit(type_id: str, image_url: str):
+    external_url = Config.get('external_url')
+    question_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
     <ExternalQuestion xmlns="http://mechanicalturk.amazonaws.com/AWSMechanicalTurkDataSchemas/2006-07-14/ExternalQuestion.xsd">
-        <ExternalURL>https://tunnel.dzeri.me</ExternalURL>
+        <ExternalURL>{external_url}?image={image_url}</ExternalURL>
         <FrameHeight>0</FrameHeight>
     </ExternalQuestion>
     '''
 
     response = Client.get().create_hit_with_hit_type(
-        HITTypeId=type,
-        MaxAssignments=1,
-        LifetimeInSeconds=600,
+        HITTypeId=type_id,
+        MaxAssignments=int(Config.get('max_assignments')),
+        LifetimeInSeconds=int(Config.get('lifetime_sec')),
         Question=question_xml
     )
 
