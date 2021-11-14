@@ -14,3 +14,9 @@ To show the usage of this library, run
 ```
 python3 manage_HITs.py --help
 ```
+
+## TODO
+- Write about the security implications of using XML parsers, and how MTurk requesters' servers could be prime targets.
+They have money after all
+
+- Add asyncio to MTurk API calls

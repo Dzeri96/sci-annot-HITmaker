@@ -4,15 +4,9 @@ from pymongo import MongoClient, DESCENDING, ASCENDING, UpdateOne
 import pandas
 import logging
 from enum import Enum
-from bson import ObjectId
+from page_status import PageStatus
 
 from mturk_client import Client
-
-class PageStatus(Enum):
-    NOT_ANNOTATED = 'NOT_ANNOTATED'
-    SUBMITTED = 'SUBMITTED'
-    RETRIEVED = 'RETRIEVED'
-    REVIEWED  = 'REVIEWED' 
 
 class DB:
     __instance: MongoClient = None
@@ -41,8 +35,11 @@ def ingest_pdf(row: pandas.Series):
         **fields
     })
 
+    # This is to handle the dumb way pdftoppm names files: 
+    # https://gitlab.freedesktop.org/poppler/poppler/-/issues/1172
+    nr_digits = len(str(fields['page_count']))
     pages = [{
-        '_id': f'{id}-{page_nr}',
+        '_id': '%s-%0*d' % (id, nr_digits, page_nr),
         'status': PageStatus.NOT_ANNOTATED.value
     } for page_nr in range(1, fields['page_count']+1)]
 
@@ -94,8 +91,29 @@ def update_pages_to_submitted(page_HIT_id_map: dict):
     if(len(page_HIT_id_map) != 0):
         update_operations = [UpdateOne(
             {"_id": page_id},
-            {"$set": {'status': PageStatus.SUBMITTED.value}, '$push': {'HIT_ids': HIT_id}}
-        ) for page_id, HIT_id in page_HIT_id_map.items()]
+            {  
+                "$set": {'status': PageStatus.SUBMITTED.value}, 
+                '$push': {
+                    'HIT_ids': response['HIT']['HITId'],
+                    'published': response['HIT']['CreationTime']
+                }
+            }
+        ) for page_id, response in page_HIT_id_map.items()]
         bulk_results = DB.get().pages.bulk_write(update_operations)
 
-        logging.debug(f'update_pages_to_submitted bulk update response: {bulk_results}')
+        logging.debug(f'Updated: {bulk_results.modified_count} documents')
+
+def update_pages_from_dict(page_id_ops_dict: dict):
+    if(len(page_id_ops_dict) != 0):
+        update_operations = [UpdateOne(
+            {'_id': page_id},
+            operations
+        ) for page_id, operations in page_id_ops_dict.items()]
+    bulk_results = DB.get().pages.bulk_write(update_operations)
+    logging.debug(f'Updated: {bulk_results.modified_count} documents')
+
+
+
+def get_pages_by_status(status: PageStatus) -> list:
+    result = DB.get().pages.find({'status': status.value})
+    return list(result)

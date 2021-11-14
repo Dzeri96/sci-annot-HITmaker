@@ -10,6 +10,8 @@ pymongo = {extras = ["srv"], version = "*"}
 coloredlogs = "*"
 pandas = "*"
 pyarrow = "*"
+pdf2image = "*"
+defusedxml = "*"
 
 [dev-packages]
 

@@ -1,6 +1,7 @@
 import boto3
 from config import Config
 import logging
+import json
 
 class Client:
     __instance: boto3.Session.client = None
@@ -64,13 +65,22 @@ def create_hit(type_id: str, image_url: str):
 
     return response
 
-def get_hit(id: str):
+def get_HIT_status(id: str):
     response = Client.get().get_hit(
         HITId=id
     )
-
+    logging.debug(f'HIT status: {response}')
     return response
 
+def get_HIT_results(hit_id: str)-> dict:
+    response = Client.get().list_assignments_for_hit(HITId=hit_id)
+    return response
+
+def list_hits():
+    response = Client.get().list_hits()
+    logging.debug(f'List hits response: {json.dumps(response)}')
+
+    return response
 #print(create_hit_type(client))
 #print(create_hit(client, '3K17V65Z3L957DTKD6L8VG0D6AHM89'))
 #print(get_hit(client, '308KJXFUJRG4D440P80HT689DSETAB'))
