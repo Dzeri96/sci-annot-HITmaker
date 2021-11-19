@@ -12,6 +12,7 @@ pandas = "*"
 pyarrow = "*"
 pdf2image = "*"
 defusedxml = "*"
+sci-annot-eval = {editable = true, path = "./../../validation"}
 
 [dev-packages]
 

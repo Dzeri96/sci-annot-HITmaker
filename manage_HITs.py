@@ -1,12 +1,18 @@
 import logging
 import coloredlogs
 import argparse
+
+from pymongo import database
 from config import Config
 import pandas as pd
 from page_status import PageStatus
 import repository
 import mturk_client
 from question_form_answers_parser import xml_to_dict
+from sci_annot_eval import evaluation
+from sci_annot_eval.parsers import sci_annot_parser
+
+answer_parser = sci_annot_parser.SciAnnotParser()
 
 def ingest(path):
     data = pd.read_parquet(path)
@@ -35,20 +41,23 @@ def create_hit_type(active: bool = False):
     repository.save_hit_type(params)
     logging.info(f'Created HIT type with params: {params}')
 
-def publish(count: int):
+def publish_random(count: int):
     unpublished = repository.get_random_not_annotated(count)
+    publish(unpublished)
+
+def publish(ids: list[str]):
     active_hit_type = repository.get_active_hit_type_or_by_id()
     
     logging.info(f'Active hit type: {active_hit_type}')
     if str(Config.get('accept_prompts')) != 'True':
-        price = float(active_hit_type['reward']) * count
+        price = float(active_hit_type['reward']) * len(ids)
         answer = input(f'This action will cost you {price}$. Are you sure you want to proceed? (N/y)? ')
         if(answer != 'y'):
             print('Cancelling action...')
             return
 
     page_id_HIT_response_map = {}
-    for page in unpublished:
+    for page in ids:
         img_url = Config.get('image_url_base') + page + Config.get('image_extension')
         try:
             response = mturk_client.create_hit(active_hit_type['_id'], img_url)
@@ -99,15 +108,40 @@ def fetch_hit_results():
                     'status': status
                 }
             }
-            if(len(parsed_assignments) != 0):
+            if parsed_assignments:
                 operation_dict[page['_id']]['$push'] = {
-                    'assignments': parsed_assignments
+                    'assignments': {'$each': parsed_assignments}
                 }
     
     repository.update_pages_from_dict(operation_dict)
-            
 
+def eval_retrieved():
+    retrieved = repository.get_pages_by_status(PageStatus.RETRIEVED)
+    passed = []
+    not_passed = []
+    for page in retrieved:
+        assignments = page['assignments']
+        if(len(assignments) > 2):
+            logging.warning(f'page {page["_id"]} has {len(assignments)} assignments! Only the last two will be evaluated')
+        answer_1_raw = page['assignments'][-2]['answer']
+        answer_2_raw = page['assignments'][-1]['answer']
+        answer_1_parsed = answer_parser.parse_dict(answer_1_raw)
+        answer_2_parsed = answer_parser.parse_dict(answer_2_raw)
+        match = evaluation.check_no_disagreements(answer_1_parsed, answer_2_parsed)
+        if match:
+            logging.debug(f'page {page["_id"]} has matching annotations')
+            passed.append(page['_id'])
+        else:
+            logging.debug(f'page {page["_id"]} don\'t have matching annotations')
+            not_passed.append(page['_id'])
 
+    logging.info(f'Validation results: {len(passed)} - good,  {len(not_passed)} - bad')
+
+    repository.update_pages_from_dict({id:{'$set': {'status': PageStatus.REVIEWED.value}} for id in passed})
+    repository.update_pages_from_dict({id:{'$set': {'status': PageStatus.REJECTED.value}} for id in not_passed})
+    
+
+      
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Amazon MTurk HIT client')
@@ -115,10 +149,11 @@ if __name__ == '__main__':
     parser.add_argument('--create-hit-type', '-t', type=bool, nargs=1, default=False, help='Create new HIT type and optionally set it as the active one', metavar='active')
     parser.add_argument('--ingest', '-i', nargs=1, help='Parquet file with pdf info', metavar='file')
     parser.add_argument('--publish-random', '-p', nargs=1, help='Publish a certain number of HITs from the pool of unpublished pages', metavar='count', type=int)
+    parser.add_argument('--publish-specific', '-P', nargs='+', help='Publish a list of pages denoted by space-separated IDs', metavar='IDs', type=str)
     parser.add_argument('--verbose', '-v', help='Enable verbose logging (info, debug)', action='count')
     parser.add_argument('--accept-prompts', '-y', help='Say yes to any prompts (UNSAFE)', action='store_true')
     parser.add_argument('--fetch-results', '-f', help='Fetch results of published HITs', action='store_true')
-
+    parser.add_argument('--evaluate-retrieved', '-E', help='Check inter-annotator agreement of retrieved annotations', action='store_true')
 
     args = parser.parse_args()
     
@@ -144,9 +179,13 @@ if __name__ == '__main__':
     if(args.ingest):
         ingest(args.ingest[0])
     elif(args.publish_random):
-        publish(args.publish_random[0])
+        publish_random(args.publish_random[0])
     elif(args.create_hit_type):
         create_hit_type(args.create_hit_type[0])
     elif(args.fetch_results):
         fetch_hit_results()
+    elif(args.evaluate_retrieved):
+        eval_retrieved()
+    elif(args.publish_specific):
+        publish(args.publish_specific)
 

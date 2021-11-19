@@ -6,8 +6,6 @@ import logging
 from enum import Enum
 from page_status import PageStatus
 
-from mturk_client import Client
-
 class DB:
     __instance: MongoClient = None
 
@@ -88,7 +86,7 @@ def get_active_hit_type_or_by_id(id: str=None):
         return result[0]
 
 def update_pages_to_submitted(page_HIT_id_map: dict):
-    if(len(page_HIT_id_map) != 0):
+    if page_HIT_id_map:
         update_operations = [UpdateOne(
             {"_id": page_id},
             {  
@@ -104,16 +102,20 @@ def update_pages_to_submitted(page_HIT_id_map: dict):
         logging.debug(f'Updated: {bulk_results.modified_count} documents')
 
 def update_pages_from_dict(page_id_ops_dict: dict):
-    if(len(page_id_ops_dict) != 0):
+    if page_id_ops_dict:
         update_operations = [UpdateOne(
             {'_id': page_id},
             operations
         ) for page_id, operations in page_id_ops_dict.items()]
-    bulk_results = DB.get().pages.bulk_write(update_operations)
-    logging.debug(f'Updated: {bulk_results.modified_count} documents')
-
-
+        bulk_results = DB.get().pages.bulk_write(update_operations)
+        logging.debug(f'Updated: {bulk_results.modified_count} documents')
 
 def get_pages_by_status(status: PageStatus) -> list:
     result = DB.get().pages.find({'status': status.value})
     return list(result)
+
+def get_pages_in_id_list(ids: list[str]) -> list[dict]:
+    result = []
+    if ids:
+        result = DB.get().pages.find({'_id': {'$in': ids}})
+    return result
