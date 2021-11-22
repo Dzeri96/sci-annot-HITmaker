@@ -1,16 +1,38 @@
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse, Http404
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 import repository
 from config import Config
+from page_status import PageStatus
+from django.views.generic import View
 
-def get_assignment(request, page_id: str, assignment_id: str):
+class Assignment(View):
+    def get(self, request, page_id: str, assignment_id: str):
+        try:
+            assignment = repository.get_assignment(page_id, assignment_id)
+            return JsonResponse(assignment)
+        except LookupError as e:
+            raise Http404(str(e))
+
+    def post(self, request, page_id: str, assignment_id: str):
+        return HttpResponse('This is POST request')
+
+def review(request):
     try:
-        assignment = repository.get_assignment(page_id, assignment_id)
-        return JsonResponse(assignment)
+        random_page = repository.get_pages_by_status(PageStatus.DEFERRED, 1)[0]
+        return redirect('review_page', page_id= random_page['_id'])
     except LookupError as e:
         raise Http404(str(e))
 
-def review(request):
-    context = {'external_url': Config.get('external_url')}
-    return render(request, 'web/review.html', context)
+def review_page(request, page_id):
+    try:
+        page = repository.get_page_by_id(page_id)
+        context = {
+            'external_url': Config.get('external_url'),
+            'assignments': page['assignments'],
+            'page_id': page_id
+        }
+        return render(request, 'web/review.html', context)
+    except LookupError as e:
+        raise Http404(str(e))
+
     

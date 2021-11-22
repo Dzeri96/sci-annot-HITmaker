@@ -41,30 +41,6 @@ def ingest_pdf(row: pandas.Series):
 
     DB.get().pages.insert_many(pages, ordered=False)
 
-def get_random_not_annotated(count: int) -> list[str]:
-    result = DB.get().pages\
-        .aggregate([
-            {
-                '$match': {
-                    'status': PageStatus.NOT_ANNOTATED.value
-                }
-            }, {
-                '$sample': {
-                    'size': count
-                }
-            }, {
-                '$project': {
-                    '_id': 1
-                }
-            }
-        ])
-    result_list =  [page['_id'] for page in result]
-
-    if(len(result_list) != 0):
-        return result_list
-    else:
-        raise Exception('There are no more unpublished pages!')
-
 def save_hit_type(params: dict):
     if(params['active']):
         # Set all existing HIT types to inactive
@@ -108,15 +84,48 @@ def update_pages_from_dict(page_id_ops_dict: dict):
         bulk_results = DB.get().pages.bulk_write(update_operations)
         logging.debug(f'Updated: {bulk_results.modified_count} documents')
 
-def get_pages_by_status(status: PageStatus) -> list:
-    result = DB.get().pages.find({'status': status.value})
-    return list(result)
+def get_pages_by_status(status: PageStatus, count: int = None, id_only: bool = False) -> list:
+    aggregation_pipeline = [{
+        '$match': {
+            'status': status.value
+        }
+    }]
 
+    if count:
+        aggregation_pipeline.append({
+            '$sample': {
+                'size': count
+            }
+        })
+
+    if id_only:
+        aggregation_pipeline.append({
+            '$project': {
+                '_id': 1
+            }
+        })
+
+    result = list(DB.get().pages.aggregate(aggregation_pipeline))
+
+    if(len(result) != 0):
+        return result
+    else:
+        raise LookupError(f'There are no more pages of status {status.value}!')
+
+# TODO: Remove?
 def get_pages_in_id_list(ids: list[str]) -> list[dict]:
     result = []
     if ids:
         result = DB.get().pages.find({'_id': {'$in': ids}})
     return result
+
+def get_page_by_id(id: str):
+    result = DB.get().pages.find_one({'_id': id})
+
+    if result:
+        return result
+    else:
+        raise LookupError(f'Page with id {id} not found!')
 
 def get_assignment(page_id: str, assignment_id: str):
     result = DB.get().pages.find_one(

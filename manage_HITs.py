@@ -43,8 +43,8 @@ def create_hit_type(active: bool = False):
     logging.info(f'Created HIT type with params: {params}')
 
 def publish_random(count: int):
-    unpublished = repository.get_random_not_annotated(count)
-    publish(unpublished)
+    unpublished = repository.get_pages_by_status(PageStatus.NOT_ANNOTATED, count, True)
+    publish([page['_id'] for page in unpublished])
 
 def publish(ids: list[str]):
     active_hit_type = repository.get_active_hit_type_or_by_id()
@@ -139,7 +139,7 @@ def eval_retrieved():
     logging.info(f'Validation results: {len(passed)} - good,  {len(not_passed)} - bad')
 
     repository.update_pages_from_dict({id:{'$set': {'status': PageStatus.REVIEWED.value}} for id in passed})
-    repository.update_pages_from_dict({id:{'$set': {'status': PageStatus.REJECTED.value}} for id in not_passed})
+    repository.update_pages_from_dict({id:{'$set': {'status': PageStatus.DEFERRED.value}} for id in not_passed})
 
 def start_server():
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'web.settings')

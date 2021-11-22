@@ -16,10 +16,11 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 
-from .views import get_assignment, review
+from .views import Assignment, review, review_page
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('assignment/<str:page_id>/<str:assignment_id>', get_assignment, name='assignment'),
-    path('review/', review, name='review')
+    path('assignment/<str:page_id>/<str:assignment_id>', Assignment.as_view(), name='assignment'),
+    path('review/', review, name='review'),
+    path('review/<str:page_id>', review_page, name='review_page')
 ]

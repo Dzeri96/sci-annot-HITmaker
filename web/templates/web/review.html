@@ -9,27 +9,51 @@
     <link rel="stylesheet" type="text/css" href="{% static 'web/review.css' %}?{% cache_bust %}">
   </head>
   <body>
-    <div id='left-pane' class='pane'>
-        <iframe src="{{ external_url }}" title="Left pane"></iframe>
-    </div>
-    <div id='border' class='border'>
-    </div>
-    <div id='right-pane' class='pane'>
-        <iframe src="{{ external_url }}" title="Right pane"></iframe>
-    </div>
-    <div id="control-box">
-        <a href="{{ external_url }}" title="Approve left">
-            <img src="{% static 'web/images/chevron-left.svg'%}" alt="left arrow">
-        </a>
-        <a href="{{ external_url }}" title="Approve right">
-            <img src="{% static 'web/images/chevron-right.svg'%}" alt="right arrow">
-        </a>
-        <a href="{{ external_url }}" title="Reject both">
-            <img src="{% static 'web/images/close.svg'%}" alt="close">
-        </a>
-        <a href="{{ external_url }}" title="Load new random">
-            <img src="{% static 'web/images/refresh.svg'%}" alt="refresh">
-        </a>
-    </div>
+    {% if assignments %}
+        <div id='left-pane' class='pane'>
+            <iframe 
+                src="{{external_url}}?answerUrl={{request.get_host}}/assignment/{{page_id}}/{{assignments.0.assignment_id}}" 
+                title="Right pane"
+            ></iframe>
+        </div>
+        {% if assignments.1 %}
+            <div id='border' class='border'>
+            </div>
+            <div id='right-pane' class='pane'>
+                <iframe 
+                    src="{{external_url}}?answerUrl={{request.get_host}}/assignment/{{page_id}}/{{assignments.1.assignment_id}}" 
+                    title="Right pane"
+                ></iframe>
+            </div>
+            <div id="control-box">
+                <form method="post" action="/assignment/{{page_id}}/{{assignments.0.assignment_id}}">
+                    {% csrf_token %}
+                    <input type="hidden" name="dummy_field" value="dummy_value">
+                    <button type="submit" title="Approve left">
+                        <img src="{% static 'web/images/chevron-left.svg'%}" alt="left arrow">
+                    </button>
+                </form>
+                <form method="post" action="/assignment/{{page_id}}/{{assignments.1.assignment_id}}">
+                    {% csrf_token %}
+                    <input type="hidden" name="dummy_field" value="dummy_value">
+                    <button type="submit" title="Approve right">
+                        <img src="{% static 'web/images/chevron-right.svg'%}" alt="right arrow">
+                    </button>
+                </form>
+                <form method="post" action="/assignment/{{page_id}}/REJECT">
+                    {% csrf_token %}
+                    <input type="hidden" name="dummy_field" value="dummy_value">
+                    <button type="submit" title="Reject both">
+                        <img src="{% static 'web/images/close.svg'%}" alt="close">
+                    </button>
+                </form>
+                <a href="/review" title="Load new random">
+                    <img src="{% static 'web/images/refresh.svg'%}" alt="refresh">
+                </a>
+            </div>
+        {% endif %}
+    {% else %}
+        No Assignments!
+    {% endif %}
   </body>
 </html>

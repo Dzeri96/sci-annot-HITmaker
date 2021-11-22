@@ -81,8 +81,3 @@ def list_hits():
     logging.debug(f'List hits response: {json.dumps(response)}')
 
     return response
-#print(create_hit_type(client))
-#print(create_hit(client, '3K17V65Z3L957DTKD6L8VG0D6AHM89'))
-#print(get_hit(client, '308KJXFUJRG4D440P80HT689DSETAB'))
-#client.delete_hit(HITId='33TGB4G0LPRG9HCT0ISVDEJ7EDMTXE')
-#print(client.list_assignments_for_hit(HITId='308KJXFUJRG4D440P80HT689DSETAB')) 
