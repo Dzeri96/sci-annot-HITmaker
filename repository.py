@@ -122,6 +122,7 @@ def get_pages_in_id_list(ids: list[str]) -> list[dict]:
 
 def get_page_by_id(id: str):
     result = DB.get().pages.find_one({'_id': id})
+    logging.debug(f'get_page_by_id result: {result}')
 
     if result:
         return result

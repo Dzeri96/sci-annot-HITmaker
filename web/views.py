@@ -51,7 +51,9 @@ def review_page(request, page_id):
         page = repository.get_page_by_id(page_id)
         context = {
             'external_url': Config.get('external_url'),
-            'assignments': page['assignments'],
+            'image_url_base': Config.get('image_url_base'),
+            'image_extension': Config.get('image_extension'),
+            'assignments': (page['assignments'] if 'assignments' in page else []),
             'page_id': page_id
         }
         return render(request, 'web/review.html', context)

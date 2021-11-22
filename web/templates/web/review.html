@@ -12,7 +12,7 @@
     {% if assignments %}
         <div id='left-pane' class='pane'>
             <iframe 
-                src="{{external_url}}?answerUrl={{request.get_host}}/assignment/{{page_id}}/{{assignments.0.assignment_id}}" 
+                src="{{external_url}}?answerUrl={{request.get_host}}/assignment/{{page_id}}/{{assignments.0.assignment_id}}?image={{image_url_base}}/{{page_id}}.{{image_extension}}" 
                 title="Right pane"
             ></iframe>
         </div>
@@ -21,7 +21,7 @@
             </div>
             <div id='right-pane' class='pane'>
                 <iframe 
-                    src="{{external_url}}?answerUrl={{request.get_host}}/assignment/{{page_id}}/{{assignments.1.assignment_id}}" 
+                    src="{{external_url}}?answerUrl={{request.get_host}}/assignment/{{page_id}}/{{assignments.1.assignment_id}}?image={{image_url_base}}/{{page_id}}.{{image_extension}}" 
                     title="Right pane"
                 ></iframe>
             </div>
@@ -53,7 +53,9 @@
             </div>
         {% endif %}
     {% else %}
-        No Assignments!
+        <div class='central-error'>
+            No Assignments!
+        </div>
     {% endif %}
   </body>
 </html>
