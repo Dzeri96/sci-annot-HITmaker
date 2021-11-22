@@ -73,7 +73,7 @@ def update_pages_to_submitted(page_HIT_id_map: dict):
         ) for page_id, response in page_HIT_id_map.items()]
         bulk_results = DB.get().pages.bulk_write(update_operations)
 
-        logging.debug(f'Updated: {bulk_results.modified_count} documents')
+        logging.debug(f'Updated: {bulk_results.modified_count} document(s)')
 
 def update_pages_from_dict(page_id_ops_dict: dict):
     if page_id_ops_dict:
@@ -82,7 +82,8 @@ def update_pages_from_dict(page_id_ops_dict: dict):
             operations
         ) for page_id, operations in page_id_ops_dict.items()]
         bulk_results = DB.get().pages.bulk_write(update_operations)
-        logging.debug(f'Updated: {bulk_results.modified_count} documents')
+        logging.debug(f'Updated: {bulk_results.modified_count} document(s)')
+        return bulk_results
 
 def get_pages_by_status(status: PageStatus, count: int = None, id_only: bool = False) -> list:
     aggregation_pipeline = [{

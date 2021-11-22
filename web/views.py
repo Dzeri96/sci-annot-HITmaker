@@ -1,4 +1,4 @@
-from django.http import HttpResponse, HttpResponseRedirect, JsonResponse, Http404
+from django.http import JsonResponse, Http404
 from django.shortcuts import render, redirect
 import repository
 from config import Config
@@ -14,7 +14,30 @@ class Assignment(View):
             raise Http404(str(e))
 
     def post(self, request, page_id: str, assignment_id: str):
-        return HttpResponse('This is POST request')
+        if assignment_id != 'REJECT':
+            update_resp = repository.update_pages_from_dict({
+                page_id: {'$set': {
+                        'status': PageStatus.REVIEWED.value,
+                        'accepted_assignment_id': assignment_id
+                    }
+                }
+            })
+        else:
+            update_resp = repository.update_pages_from_dict({
+                page_id: {
+                    '$set': {
+                        'status': PageStatus.REJECTED.value
+                    },
+                    '$unset': {
+                        'accepted_assignment_id': ''
+                    }
+                }
+            })
+        
+        if(update_resp.modified_count != 0):
+            return redirect('review')
+        else:
+            return Http404('Page/assignment combination not found!')
 
 def review(request):
     try:
