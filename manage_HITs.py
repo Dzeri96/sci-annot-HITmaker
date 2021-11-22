@@ -1,8 +1,7 @@
 import logging
 import coloredlogs
 import argparse
-
-from pymongo import database
+import os
 from config import Config
 import pandas as pd
 from page_status import PageStatus
@@ -11,6 +10,8 @@ import mturk_client
 from question_form_answers_parser import xml_to_dict
 from sci_annot_eval import evaluation
 from sci_annot_eval.parsers import sci_annot_parser
+from django.core import management
+from django.core.wsgi import get_wsgi_application 
 
 answer_parser = sci_annot_parser.SciAnnotParser()
 
@@ -139,7 +140,11 @@ def eval_retrieved():
 
     repository.update_pages_from_dict({id:{'$set': {'status': PageStatus.REVIEWED.value}} for id in passed})
     repository.update_pages_from_dict({id:{'$set': {'status': PageStatus.REJECTED.value}} for id in not_passed})
-    
+
+def start_server():
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'web.settings')
+    application = get_wsgi_application()
+    management.call_command('runserver')
 
       
 
@@ -154,6 +159,8 @@ if __name__ == '__main__':
     parser.add_argument('--accept-prompts', '-y', help='Say yes to any prompts (UNSAFE)', action='store_true')
     parser.add_argument('--fetch-results', '-f', help='Fetch results of published HITs', action='store_true')
     parser.add_argument('--evaluate-retrieved', '-E', help='Check inter-annotator agreement of retrieved annotations', action='store_true')
+    parser.add_argument('--start-server', '-s', help='Start annotation inspection webserver', action='store_true')
+    
 
     args = parser.parse_args()
     
@@ -188,4 +195,7 @@ if __name__ == '__main__':
         eval_retrieved()
     elif(args.publish_specific):
         publish(args.publish_specific)
+    elif(args.start_server):
+        start_server()
+        print()
 

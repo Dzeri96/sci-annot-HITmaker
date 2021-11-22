@@ -13,6 +13,7 @@ pyarrow = "*"
 pdf2image = "*"
 defusedxml = "*"
 sci-annot-eval = {editable = true, path = "./../../validation"}
+django = "*"
 
 [dev-packages]
 

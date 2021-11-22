@@ -20,3 +20,4 @@ python3 manage_HITs.py --help
 They have money after all
 
 - Add asyncio to MTurk API calls
+- Implement race condition handling in the API

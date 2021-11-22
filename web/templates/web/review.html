@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+{% load static %}
+{% load cache_bust %}
+
+<html>
+  <head>
+    <title>Sci-Annot Review System</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" type="text/css" href="{% static 'web/review.css' %}?{% cache_bust %}">
+  </head>
+  <body>
+    <div id='left-pane' class='pane'>
+        <iframe src="{{ external_url }}" title="Left pane"></iframe>
+    </div>
+    <div id='border' class='border'>
+    </div>
+    <div id='right-pane' class='pane'>
+        <iframe src="{{ external_url }}" title="Right pane"></iframe>
+    </div>
+    <div id="control-box">
+        <a href="{{ external_url }}" title="Approve left">
+            <img src="{% static 'web/images/chevron-left.svg'%}" alt="left arrow">
+        </a>
+        <a href="{{ external_url }}" title="Approve right">
+            <img src="{% static 'web/images/chevron-right.svg'%}" alt="right arrow">
+        </a>
+        <a href="{{ external_url }}" title="Reject both">
+            <img src="{% static 'web/images/close.svg'%}" alt="close">
+        </a>
+        <a href="{{ external_url }}" title="Load new random">
+            <img src="{% static 'web/images/refresh.svg'%}" alt="refresh">
+        </a>
+    </div>
+  </body>
+</html>

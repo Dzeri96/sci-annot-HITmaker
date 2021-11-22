@@ -1,9 +1,7 @@
-from numpy import number
 from config import Config
 from pymongo import MongoClient, DESCENDING, ASCENDING, UpdateOne
 import pandas
 import logging
-from enum import Enum
 from page_status import PageStatus
 
 class DB:
@@ -119,3 +117,14 @@ def get_pages_in_id_list(ids: list[str]) -> list[dict]:
     if ids:
         result = DB.get().pages.find({'_id': {'$in': ids}})
     return result
+
+def get_assignment(page_id: str, assignment_id: str):
+    result = DB.get().pages.find_one(
+        {'_id': page_id, 'assignments.assignment_id': assignment_id},
+        {"assignments": {'$elemMatch': {'assignment_id': assignment_id}}}
+    )
+
+    if result:
+        return result['assignments'][0]
+    else:
+        raise LookupError(f'Assignment {assignment_id} in page {page_id} not found!')
