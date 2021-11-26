@@ -11,7 +11,7 @@ from question_form_answers_parser import xml_to_dict
 from sci_annot_eval import evaluation
 from sci_annot_eval.parsers import sci_annot_parser
 from django.core import management
-from django.core.wsgi import get_wsgi_application 
+from django.core.wsgi import get_wsgi_application
 
 answer_parser = sci_annot_parser.SciAnnotParser()
 
@@ -42,11 +42,11 @@ def create_hit_type(active: bool = False):
     repository.save_hit_type(params)
     logging.info(f'Created HIT type with params: {params}')
 
-def publish_random(count: int):
+def publish_random(count: int, comment: str = None):
     unpublished = repository.get_pages_by_status(PageStatus.NOT_ANNOTATED, count, True)
-    publish([page['_id'] for page in unpublished])
+    publish([page['_id'] for page in unpublished], comment)
 
-def publish(ids: list[str]):
+def publish(ids: list[str], comment: str = None):
     active_hit_type = repository.get_active_hit_type_or_by_id()
     
     logging.info(f'Active hit type: {active_hit_type}')
@@ -61,7 +61,7 @@ def publish(ids: list[str]):
     for page in ids:
         img_url = Config.get('image_url_base') + page + Config.get('image_extension')
         try:
-            response = mturk_client.create_hit(active_hit_type['_id'], img_url)
+            response = mturk_client.create_hit(active_hit_type['_id'], img_url, comment)
             if(response['ResponseMetadata']['HTTPStatusCode'] == 200):
                 logging.debug(f'Created hit: {response}')
                 page_id_HIT_response_map[page] = response
@@ -119,27 +119,36 @@ def fetch_hit_results():
 def eval_retrieved():
     retrieved = repository.get_pages_by_status(PageStatus.RETRIEVED)
     passed = []
-    not_passed = []
+    deferred = []
+    rejected = []
     for page in retrieved:
         assignments = page['assignments']
-        if(len(assignments) > 2):
-            logging.warning(f'page {page["_id"]} has {len(assignments)} assignments! Only the last two will be evaluated')
-        answer_1_raw = page['assignments'][-2]['answer']
-        answer_2_raw = page['assignments'][-1]['answer']
-        answer_1_parsed = answer_parser.parse_dict(answer_1_raw)
-        answer_2_parsed = answer_parser.parse_dict(answer_2_raw)
-        match = evaluation.check_no_disagreements(answer_1_parsed, answer_2_parsed)
-        if match:
-            logging.debug(f'page {page["_id"]} has matching annotations')
-            passed.append(page['_id'])
+        nr_assignments = len(assignments)
+        if (nr_assignments == 0):
+            rejected.append(page['_id'])
+            logging.warning(f'page {page["_id"]} has no assignments!')
+        elif (nr_assignments == 1):
+            deferred.append(page['_id'])
         else:
-            logging.debug(f'page {page["_id"]} don\'t have matching annotations')
-            not_passed.append(page['_id'])
+            if (len(assignments) > 2):
+                logging.warning(f'page {page["_id"]} has {len(assignments)} assignments! Only the last two will be evaluated')
+            answer_1_raw = page['assignments'][-2]['answer']
+            answer_2_raw = page['assignments'][-1]['answer']
+            answer_1_parsed = answer_parser.parse_dict(answer_1_raw)
+            answer_2_parsed = answer_parser.parse_dict(answer_2_raw)
+            match = evaluation.check_no_disagreements(answer_1_parsed, answer_2_parsed)
+            if match:
+                logging.debug(f'page {page["_id"]} has matching annotations')
+                passed.append(page['_id'])
+            else:
+                logging.debug(f'page {page["_id"]} doesn\'t have matching annotations')
+                deferred.append(page['_id'])
 
-    logging.info(f'Validation results: {len(passed)} - good,  {len(not_passed)} - bad')
+    logging.info(f'Validation results: {len(passed)} - good, {len(deferred)} - deferred, {len(rejected)} - rejected.')
 
     repository.update_pages_from_dict({id:{'$set': {'status': PageStatus.REVIEWED.value}} for id in passed})
-    repository.update_pages_from_dict({id:{'$set': {'status': PageStatus.DEFERRED.value}} for id in not_passed})
+    repository.update_pages_from_dict({id:{'$set': {'status': PageStatus.DEFERRED.value}} for id in deferred})
+    repository.update_pages_from_dict({id:{'$set': {'status': PageStatus.REJECTED.value}} for id in rejected})
 
 def start_server():
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'web.settings')
@@ -160,6 +169,7 @@ if __name__ == '__main__':
     parser.add_argument('--fetch-results', '-f', help='Fetch results of published HITs', action='store_true')
     parser.add_argument('--evaluate-retrieved', '-E', help='Check inter-annotator agreement of retrieved annotations', action='store_true')
     parser.add_argument('--start-server', '-s', help='Start annotation inspection webserver', action='store_true')
+    parser.add_argument('--comment', '-c', help='Pass comment to created HIT that will be saved in the answer', metavar='COMMENT', type=str)
     
 
     args = parser.parse_args()
@@ -186,7 +196,10 @@ if __name__ == '__main__':
     if(args.ingest):
         ingest(args.ingest[0])
     elif(args.publish_random):
-        publish_random(args.publish_random[0])
+        comment = None
+        if(args.comment):
+            comment = args.comment
+        publish_random(args.publish_random[0], comment)
     elif(args.create_hit_type):
         create_hit_type(args.create_hit_type[0])
     elif(args.fetch_results):

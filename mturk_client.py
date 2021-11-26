@@ -2,6 +2,7 @@ import boto3
 from config import Config
 import logging
 import json
+import urllib
 
 class Client:
     __instance: boto3.Session.client = None
@@ -47,11 +48,14 @@ def create_hit_type (
     else:
         raise Exception('Could not create HIT type: ' + str(response))
 
-def create_hit(type_id: str, image_url: str):
+def create_hit(type_id: str, image_url: str, comment: str = None):
     external_url = Config.get('external_url')
+    fullUrl = f'{external_url}?image={image_url}'
+    if comment:
+        fullUrl += f'&amp;comment={urllib.parse.quote_plus(comment)}'
     question_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
     <ExternalQuestion xmlns="http://mechanicalturk.amazonaws.com/AWSMechanicalTurkDataSchemas/2006-07-14/ExternalQuestion.xsd">
-        <ExternalURL>{external_url}?image={image_url}</ExternalURL>
+        <ExternalURL>{fullUrl}</ExternalURL>
         <FrameHeight>0</FrameHeight>
     </ExternalQuestion>
     '''

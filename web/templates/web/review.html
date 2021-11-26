@@ -25,25 +25,32 @@
                     title="Right pane"
                 ></iframe>
             </div>
-            <div id="control-box">
+        {% endif %}
+        <div id="control-box" class="{%if assignments.1%}double{%else%}single{%endif%}">
                 <form method="post" action="/assignment/{{page_id}}/{{assignments.0.assignment_id}}">
                     {% csrf_token %}
                     <input type="hidden" name="dummy_field" value="dummy_value">
-                    <button type="submit" title="Approve left">
-                        <img src="{% static 'web/images/chevron-left.svg'%}" alt="left arrow">
+                    <button type="submit" title="Approve {%if assignments.1%} left{%endif%}">
+                        {% if assignments.1 %}
+                            <img src="{% static 'web/images/chevron-left.svg'%}" alt="left arrow">
+                        {% else %}
+                            <img src="{% static 'web/images/check.svg'%}" alt="check">
+                        {% endif %}
                     </button>
                 </form>
-                <form method="post" action="/assignment/{{page_id}}/{{assignments.1.assignment_id}}">
-                    {% csrf_token %}
-                    <input type="hidden" name="dummy_field" value="dummy_value">
-                    <button type="submit" title="Approve right">
-                        <img src="{% static 'web/images/chevron-right.svg'%}" alt="right arrow">
-                    </button>
-                </form>
+                {%if assignments.1%}
+                    <form method="post" action="/assignment/{{page_id}}/{{assignments.1.assignment_id}}">
+                        {% csrf_token %}
+                        <input type="hidden" name="dummy_field" value="dummy_value">
+                        <button type="submit" title="Approve right">
+                            <img src="{% static 'web/images/chevron-right.svg'%}" alt="right arrow">
+                        </button>
+                    </form>
+                {% endif %}
                 <form method="post" action="/assignment/{{page_id}}/REJECT">
                     {% csrf_token %}
                     <input type="hidden" name="dummy_field" value="dummy_value">
-                    <button type="submit" title="Reject both">
+                    <button type="submit" title="Reject {%if assignments.1%} both{%endif%}">
                         <img src="{% static 'web/images/close.svg'%}" alt="close">
                     </button>
                 </form>
@@ -51,7 +58,6 @@
                     <img src="{% static 'web/images/refresh.svg'%}" alt="refresh">
                 </a>
             </div>
-        {% endif %}
     {% else %}
         <div class='central-error'>
             <b>NO ASSIGNMENTS</b>
