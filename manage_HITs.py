@@ -7,7 +7,7 @@ import pandas as pd
 from page_status import PageStatus
 import repository
 import mturk_client
-from question_form_answers_parser import xml_to_dict
+from question_form_answers_parser import xml_to_dict, sci_annot_parsers_dict
 from sci_annot_eval import evaluation
 from sci_annot_eval.parsers import sci_annot_parser
 from django.core import management
@@ -101,7 +101,7 @@ def fetch_hit_results():
                         'HIT_id': assignment['HITId'],
                         'auto_approval_time': assignment['AutoApprovalTime'],
                         'submit_time': assignment['SubmitTime'],
-                        'answer': xml_to_dict(assignment['Answer'], ['annotations'])
+                        'answer': xml_to_dict(assignment['Answer'], sci_annot_parsers_dict)
                     })
 
             operation_dict[page['_id']] = {

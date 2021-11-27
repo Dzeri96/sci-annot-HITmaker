@@ -5,8 +5,10 @@ class PageStatus(Enum):
     SUBMITTED = 'SUBMITTED'
     EXPIRED  ='EXPIRED'
     RETRIEVED = 'RETRIEVED'
-    # Passed review
+    # Passed automatic review
     REVIEWED  = 'REVIEWED'
+    # Passed manual review
+    VERIFIED = 'VERIFIED'
     # Deferred for manual review
     DEFERRED = 'DEFERRED'
     REJECTED = 'REJECTED'
