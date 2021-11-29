@@ -15,6 +15,7 @@ defusedxml = "*"
 sci-annot-eval = {editable = true, path = "./../../validation"}
 django = "*"
 django-cors-headers = "*"
+faker = "*"
 
 [dev-packages]
 

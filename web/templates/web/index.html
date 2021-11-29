@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+{% load static %}
+{% load cache_bust %}
+<html>
+    <head>
+        <title>HITMaker Dashboard</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" type="text/css" href="{% static 'web/index.css' %}?{% cache_bust %}">
+        <link rel="stylesheet" type="text/css" href="{% static 'web/style.css' %}?{% cache_bust %}">
+    </head>
+  <body>
+    <h1>HITMaker Dashboard</h1>
+    <div id="status-container">
+        <h2>Pages:</h2>
+        <table class="fixed">
+            <tr><th align="left">Status</th><th>Count</th><th></th></tr>
+            {% for entry in status_counts %}
+                <tr>
+                    <th align="left"><a href="/review?page_status={{entry.status}}">{{entry.status}}</a></th>
+                    <th>{{entry.count}}</th>
+                    <th>
+                        <div style="background-color: {{entry.color}}; width: {% widthratio entry.count total_count 100 %}%;">
+                            {% widthratio entry.count total_count 100 %}%
+                        </div>
+                    </th>
+                </tr>
+            {% endfor %}
+            <tr>
+                <th align="left"><b>Total</b></th>
+                <th>{{total_count}}</th>
+                <th>
+                </th>
+            </tr>
+        </table>
+    </div>
+  </body>
+</html>

@@ -6,6 +6,27 @@ import repository
 from config import Config
 from page_status import PageStatus
 from django.views.generic import View
+from faker import Faker
+from faker.providers import color
+
+fake = Faker()
+fake.add_provider(color)
+fake.seed_instance(10)
+
+def index(request):
+    status_counts = repository.get_status_counts()
+    total_count = 0
+    for status_count in status_counts:
+        total_count += status_count['count']
+        status_count['color'] = fake.color(luminosity='light', hue=(0, 360))
+    fake.seed_instance(10)
+
+    context = {
+        'status_counts': status_counts,
+        'total_count': total_count
+    }
+    logging.debug(f'context: {context}')
+    return render(request, 'web/index.html', context)
 
 class Assignment(View):
     def get(self, request, page_id: str, assignment_id: str):

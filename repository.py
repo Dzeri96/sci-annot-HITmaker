@@ -139,3 +139,27 @@ def get_assignment(page_id: str, assignment_id: str):
         return result['assignments'][0]
     else:
         raise LookupError(f'Assignment {assignment_id} in page {page_id} not found!')
+
+def get_status_counts() -> list[dict[str, int]]:
+    result = DB.get().pages.aggregate([
+        {
+            '$group': {
+                '_id': '$status', 
+                'count': {
+                    '$sum': 1
+                }
+            }
+        }, {
+            '$project': {
+                '_id': 0, 
+                'status': '$_id', 
+                'count': 1
+            }
+        }, {
+            '$sort': {
+                'count': 1
+            }
+        }
+    ])
+
+    return list(result)

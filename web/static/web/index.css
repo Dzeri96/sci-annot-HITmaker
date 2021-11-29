@@ -1,0 +1,13 @@
+#status-container {
+    border: 1px solid #D6D6D6;
+    border-radius: 5px;
+    padding: 1em;
+}
+
+h2 {
+    margin: 0 0 0.3em 0;
+}
+table { 
+    width: 100%;
+}
+th:last-child {width: 100%;}/*Setting the width of column 3.*/
