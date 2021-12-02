@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 {% load static %}
 {% load cache_bust %}
+{% load assignment_url %}
 
 <html>
   <head>
@@ -11,18 +12,19 @@
   </head>
   <body>
     {% if assignments %}
-        <div id='left-pane' class='pane'>
-            <iframe 
-                src="{{external_url}}?assignmentUrl=http://{{request.get_host}}/assignment/{{page_id}}/{{assignments.0.assignment_id}}&amp;image={{image_url_base}}{{page_id}}{{image_extension}}" 
+        <div id='left-pane' class="pane {%if accepted_assignment_id == assignments.0.assignment_id%}accepted{%endif%}">
+            {% assignment_url request.get_host page_id assignments.0.assignment_id page_status as assig_url_encoded%}
+            <iframe
+                src="{{external_url}}?assignmentUrl={{assig_url_encoded}}&amp;image={{image_url_base}}{{page_id}}{{image_extension}}&amp;csrf_token={{csrf_token}}"
                 title="Right pane"
             ></iframe>
         </div>
         {% if assignments.1 %}
             <div id='border' class='border'>
             </div>
-            <div id='right-pane' class='pane'>
+            <div id='right-pane' class="pane {%if accepted_assignment_id == assignments.1.assignment_id%}accepted{%endif%}">
                 <iframe 
-                    src="{{external_url}}?assignmentUrl=http://{{request.get_host}}/assignment/{{page_id}}/{{assignments.1.assignment_id}}&amp;image={{image_url_base}}{{page_id}}{{image_extension}}" 
+                    src="{{external_url}}?assignmentUrl=http://{{request.get_host}}/assignment/{{page_id}}/{{assignments.1.assignment_id}}&amp;image={{image_url_base}}{{page_id}}{{image_extension}}&amp;csrf_token={{csrf_token}}" 
                     title="Right pane"
                 ></iframe>
             </div>

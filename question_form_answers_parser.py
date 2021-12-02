@@ -50,10 +50,17 @@ def xml_to_dict(input: str, field_parser_dict: dict[str, Callable[[str], Any]]) 
         
         key = identifierNode.text
         value = textNode.text
+        result[key] = value
+    
+    return parse_typed_dict(result, field_parser_dict)
+
+def parse_typed_dict(raw_dict: dict, field_parser_dict: dict[str, Callable[[str], Any]]) -> dict:
+    result = {}
+    for key, value in raw_dict.items():
         if(key in field_parser_dict.keys()):
             value = field_parser_dict[key](value)
         result[key] = value
-    
+
     return result
         
 

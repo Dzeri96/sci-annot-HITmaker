@@ -120,7 +120,7 @@ def get_pages_in_id_list(ids: list[str]) -> list[dict]:
         result = DB.get().pages.find({'_id': {'$in': ids}})
     return result
 
-def get_page_by_id(id: str):
+def get_page_by_id(id: str) -> dict:
     result = DB.get().pages.find_one({'_id': id})
     logging.debug(f'get_page_by_id result: {result}')
 

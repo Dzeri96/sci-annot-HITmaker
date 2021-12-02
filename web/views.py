@@ -1,3 +1,4 @@
+from datetime import datetime
 import logging
 from django.http import JsonResponse, Http404, QueryDict
 from django.http.response import HttpResponseRedirect
@@ -8,10 +9,18 @@ from page_status import PageStatus
 from django.views.generic import View
 from faker import Faker
 from faker.providers import color
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+import string
+import random
+from question_form_answers_parser import parse_typed_dict, sci_annot_parsers_dict
 
 fake = Faker()
 fake.add_provider(color)
 fake.seed_instance(10)
+
+def id_generator(size=6, chars=string.ascii_uppercase + string.digits):
+    return ''.join(random.choice(chars) for _ in range(size))
 
 def index(request):
     status_counts = repository.get_status_counts()
@@ -28,7 +37,9 @@ def index(request):
     logging.debug(f'context: {context}')
     return render(request, 'web/index.html', context)
 
+@method_decorator(csrf_exempt, name='dispatch')
 class Assignment(View):
+
     def get(self, request, page_id: str, assignment_id: str):
         try:
             assignment = repository.get_assignment(page_id, assignment_id)
@@ -36,14 +47,36 @@ class Assignment(View):
         except LookupError as e:
             raise Http404(str(e))
 
+    @csrf_exempt
     def post(self, request, page_id: str, assignment_id: str):
         if assignment_id != 'REJECT':
-            update_resp = repository.update_pages_from_dict({
-                page_id: {'$set': {
-                        'status': PageStatus.VERIFIED.value,
-                        'accepted_assignment_id': assignment_id
+            post_data: dict = request.POST.dict()
+            logging.debug(f'POST data: ${post_data}')
+
+            set_data = {
+                'status': PageStatus.VERIFIED.value,
+            }
+            update_data = {
+                '$set': set_data
+            }
+            
+            # Annotations edited by an admin
+            if ('dummy_field' not in post_data.keys()):
+                assignment_id = f'ADMIN_{assignment_id}_{id_generator()}'
+                post_data.pop('csrfmiddlewaretoken', None)
+                post_data.pop('assignmentId', None)
+                update_data['$push'] = {
+                    'assignments': {
+                        'assignment_id': assignment_id,
+                        'worker_id': 'ADMIN',
+                        'submit_time': datetime.now(),
+                        'answer': parse_typed_dict(post_data, sci_annot_parsers_dict)
                     }
                 }
+
+            set_data['accepted_assignment_id'] = assignment_id
+            update_resp = repository.update_pages_from_dict({
+                page_id: update_data
             })
         else:
             update_resp = repository.update_pages_from_dict({
@@ -90,9 +123,10 @@ def review_page(request, page_id: str):
             'external_url': Config.get('external_url'),
             'image_url_base': Config.get('image_url_base'),
             'image_extension': Config.get('image_extension'),
-            'assignments': (page['assignments'] if 'assignments' in page else []),
+            'assignments': (page['assignments'][-2:] if 'assignments' in page else []),
             'page_id': page_id,
-            'page_status': page_status
+            'page_status': page_status,
+            'accepted_assignment_id': (page['accepted_assignment_id'] if 'accepted_assignment_id' in page.keys() else None)
         }
         return render(request, 'web/review.html', context)
     except LookupError as e:
