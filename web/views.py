@@ -48,8 +48,10 @@ class Assignment(View):
 
     def get(self, request, page_id: str, assignment_id: str):
         try:
+            crop_whitespace = request.GET.get('crop_whitespace', 'False')
+            crop_whitespace = crop_whitespace.lower() == 'true'
             assignment = repository.get_assignment(page_id, assignment_id)
-            if(True):
+            if(crop_whitespace):
                 img_path = Config.get('image_folder') + page_id + Config.get('image_extension')
                 orig_answer = assignment['answer']
                 orig_bboxes = answer_parser.parse_dict(orig_answer, False)
@@ -115,23 +117,19 @@ class Assignment(View):
 def review(request):
     # Get page status from query string if exists, otherwise use deferred
     page_status = request.GET.get('page_status', PageStatus.DEFERRED.name)
-    query_dict = QueryDict('',mutable=True)
-    query_dict.update({'page_status': page_status})
     
     try:
         # TODO: This can be cached to reduce DB round-trips
         random_page = repository.get_pages_by_status(PageStatus[page_status.upper()], 1)[0]
         # Django has terrible support for query params
         reversed_url = reverse('review_page', kwargs={'page_id': random_page['_id']})
-        full_redirect_url = reversed_url + '?' + query_dict.urlencode()
+        full_redirect_url = reversed_url + '?' + request.GET.urlencode()
         return HttpResponseRedirect(full_redirect_url)
     except LookupError as e:
         raise Http404(str(e))
 
 def review_page(request, page_id: str):
     try:
-         # Get page status from query string if exists, otherwise use deferred
-        page_status = request.GET.get('page_status', PageStatus.DEFERRED.name)
         page = repository.get_page_by_id(page_id)
         context = {
             'external_url': Config.get('external_url'),
@@ -139,8 +137,8 @@ def review_page(request, page_id: str):
             'image_extension': Config.get('image_extension'),
             'assignments': (page['assignments'][-2:] if 'assignments' in page else []),
             'page_id': page_id,
-            'page_status': page_status,
-            'accepted_assignment_id': (page['accepted_assignment_id'] if 'accepted_assignment_id' in page.keys() else None)
+            'accepted_assignment_id': (page['accepted_assignment_id'] if 'accepted_assignment_id' in page.keys() else None),
+            'query_params': request.GET
         }
         return render(request, 'web/review.html', context)
     except LookupError as e:
