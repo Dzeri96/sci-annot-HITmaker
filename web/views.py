@@ -48,8 +48,7 @@ class Assignment(View):
 
     def get(self, request, page_id: str, assignment_id: str):
         try:
-            crop_whitespace = request.GET.get('crop_whitespace', 'False')
-            crop_whitespace = crop_whitespace.lower() == 'true'
+            crop_whitespace = request.GET.__contains__('crop_whitespace')
             assignment = repository.get_assignment(page_id, assignment_id)
             if(crop_whitespace):
                 img_path = Config.get('image_folder') + page_id + Config.get('image_extension')
