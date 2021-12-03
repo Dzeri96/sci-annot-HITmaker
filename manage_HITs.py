@@ -12,6 +12,7 @@ from sci_annot_eval import evaluation
 from sci_annot_eval.parsers import sci_annot_parser
 from django.core import management
 from django.core.wsgi import get_wsgi_application
+from sci_annot_eval.helpers import helpers
 
 answer_parser = sci_annot_parser.SciAnnotParser()
 
@@ -75,9 +76,6 @@ def publish(ids: list[str], comment: str = None):
     repository.update_pages_to_submitted(page_id_HIT_response_map)
 
 def fetch_hit_results():
-    #mturk_client.fetch_hit_results(['3BVS8WK9Q05JN0TH1A19AAQ6K15IBG'])
-    #mturk_client.get_HIT_status('3BVS8WK9Q05JN0TH1A19AAQ6K15IBG')
-
     submitted_pages = repository.get_pages_by_status(PageStatus.SUBMITTED)
     nr_found_pages = len(submitted_pages)
     logging.info(f'Found {nr_found_pages} submitted pages.')
@@ -134,9 +132,12 @@ def eval_retrieved():
                 logging.warning(f'page {page["_id"]} has {len(assignments)} assignments! Only the last two will be evaluated')
             answer_1_raw = page['assignments'][-2]['answer']
             answer_2_raw = page['assignments'][-1]['answer']
-            answer_1_parsed = answer_parser.parse_dict(answer_1_raw)
-            answer_2_parsed = answer_parser.parse_dict(answer_2_raw)
-            match = evaluation.check_no_disagreements(answer_1_parsed, answer_2_parsed)
+            img_path = Config.get('image_folder') + page['_id'] + Config.get('image_extension')
+            answer_1_parsed = answer_parser.parse_dict(answer_1_raw, False)
+            answer_1_parsed = helpers.make_absolute(helpers.crop_all_to_content(img_path, answer_1_parsed), answer_1_raw['canvasWidth'], answer_1_raw['canvasHeight'])
+            answer_2_parsed = answer_parser.parse_dict(answer_2_raw, False)
+            answer_2_parsed = helpers.make_absolute(helpers.crop_all_to_content(img_path, answer_2_parsed), answer_2_raw['canvasWidth'], answer_2_raw['canvasHeight'])
+            match = evaluation.check_no_disagreements(answer_1_parsed, answer_2_parsed, 0.95)
             if match:
                 logging.debug(f'page {page["_id"]} has matching annotations')
                 passed.append(page['_id'])

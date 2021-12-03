@@ -14,6 +14,12 @@ from django.views.decorators.csrf import csrf_exempt
 import string
 import random
 from question_form_answers_parser import parse_typed_dict, sci_annot_parsers_dict
+from sci_annot_eval.parsers import sci_annot_parser
+from sci_annot_eval.exporters import sci_annot_exporter
+from sci_annot_eval.helpers import helpers
+
+answer_parser = sci_annot_parser.SciAnnotParser()
+answer_exporter = sci_annot_exporter.SciAnnotExporter()
 
 fake = Faker()
 fake.add_provider(color)
@@ -43,6 +49,14 @@ class Assignment(View):
     def get(self, request, page_id: str, assignment_id: str):
         try:
             assignment = repository.get_assignment(page_id, assignment_id)
+            if(True):
+                img_path = Config.get('image_folder') + page_id + Config.get('image_extension')
+                orig_answer = assignment['answer']
+                orig_bboxes = answer_parser.parse_dict(orig_answer, False)
+                cropped_bboxes = helpers.crop_all_to_content(img_path, orig_bboxes)
+                exported_annots = answer_exporter.export_to_dict(cropped_bboxes, int(orig_answer['canvasWidth']), int(orig_answer['canvasHeight']))
+                orig_answer['annotations'] = exported_annots['annotations']
+            logging.debug(f'Returning assignment: {assignment}')
             return JsonResponse(assignment)
         except LookupError as e:
             raise Http404(str(e))
