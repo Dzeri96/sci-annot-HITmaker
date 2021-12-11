@@ -2,7 +2,9 @@ from datetime import datetime
 import logging
 from django.http import JsonResponse, Http404, QueryDict
 from django.http.response import HttpResponseRedirect
-from django.shortcuts import render, reverse
+from django.shortcuts import render
+from django.urls import reverse
+from sci_annot_eval.common.bounding_box import RelativeBoundingBox
 import repository
 from config import Config
 from page_status import PageStatus
@@ -17,7 +19,7 @@ from question_form_answers_parser import parse_typed_dict, sci_annot_parsers_dic
 from sci_annot_eval.parsers import sci_annot_parser
 from sci_annot_eval.exporters import sci_annot_exporter
 from sci_annot_eval.helpers import helpers
-
+from typing import Any, cast
 answer_parser = sci_annot_parser.SciAnnotParser()
 answer_exporter = sci_annot_exporter.SciAnnotExporter()
 
@@ -54,7 +56,8 @@ class Assignment(View):
                 img_path = Config.get('image_folder') + page_id + Config.get('image_extension')
                 orig_answer = assignment['answer']
                 orig_bboxes = answer_parser.parse_dict(orig_answer, False)
-                cropped_bboxes = helpers.crop_all_to_content(img_path, orig_bboxes)
+                # TODO: Remove the need for casting
+                cropped_bboxes = helpers.crop_all_to_content(img_path, cast(list[RelativeBoundingBox],orig_bboxes))
                 exported_annots = answer_exporter.export_to_dict(cropped_bboxes, int(orig_answer['canvasWidth']), int(orig_answer['canvasHeight']))
                 orig_answer['annotations'] = exported_annots['annotations']
             logging.debug(f'Returning assignment: {assignment}')
@@ -71,7 +74,7 @@ class Assignment(View):
             set_data = {
                 'status': PageStatus.VERIFIED.value,
             }
-            update_data = {
+            update_data: dict[str, Any] = {
                 '$set': set_data
             }
             
@@ -106,7 +109,7 @@ class Assignment(View):
             })
         
         query_dict = request.GET.copy()
-        if(update_resp.modified_count != 0):
+        if(update_resp and update_resp.modified_count):
             reversed_url = reverse('review')
             full_redirect_url = reversed_url + '?' + query_dict.urlencode()
             return HttpResponseRedirect(full_redirect_url)

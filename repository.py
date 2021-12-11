@@ -1,3 +1,4 @@
+from pymongo.database import Database
 from config import Config
 from pymongo import MongoClient, DESCENDING, ASCENDING, UpdateOne
 import pandas
@@ -5,7 +6,7 @@ import logging
 from page_status import PageStatus
 
 class DB:
-    __instance: MongoClient = None
+    __instance: Database
 
     @staticmethod
     def get():
@@ -48,11 +49,11 @@ def save_hit_type(params: dict):
     
     DB.get().hit_types.insert_one(params)
 
-def get_active_hit_type_or_by_id(id: str=None):
+def get_active_hit_type_or_by_id(id: str=None)-> dict:
     if (id is not None):
         result = DB.get().hit_types.find({'_id': id})
         logging.debug(f'Returning specific hit type with id {id}')
-        return result[0]
+        return result.next()
     else:
         result = list(DB.get().hit_types.find({'active': True}))
         if(len(result) > 1):
@@ -118,7 +119,7 @@ def get_pages_in_id_list(ids: list[str]) -> list[dict]:
     result = []
     if ids:
         result = DB.get().pages.find({'_id': {'$in': ids}})
-    return result
+    return list(result)
 
 def get_page_by_id(id: str) -> dict:
     result = DB.get().pages.find_one({'_id': id})

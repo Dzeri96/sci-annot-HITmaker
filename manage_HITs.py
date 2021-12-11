@@ -1,7 +1,10 @@
 import logging
+from typing import cast
 import coloredlogs
 import argparse
 import os
+
+from sci_annot_eval.common.bounding_box import RelativeBoundingBox
 from config import Config
 import pandas as pd
 from page_status import PageStatus
@@ -133,9 +136,9 @@ def eval_retrieved():
             answer_1_raw = page['assignments'][-2]['answer']
             answer_2_raw = page['assignments'][-1]['answer']
             img_path = Config.get('image_folder') + page['_id'] + Config.get('image_extension')
-            answer_1_parsed = answer_parser.parse_dict(answer_1_raw, False)
+            answer_1_parsed = cast(list[RelativeBoundingBox], answer_parser.parse_dict(answer_1_raw, False))
             answer_1_parsed = helpers.make_absolute(helpers.crop_all_to_content(img_path, answer_1_parsed), answer_1_raw['canvasWidth'], answer_1_raw['canvasHeight'])
-            answer_2_parsed = answer_parser.parse_dict(answer_2_raw, False)
+            answer_2_parsed = cast(list[RelativeBoundingBox], answer_parser.parse_dict(answer_2_raw, False))
             answer_2_parsed = helpers.make_absolute(helpers.crop_all_to_content(img_path, answer_2_parsed), answer_2_raw['canvasWidth'], answer_2_raw['canvasHeight'])
             match = evaluation.check_no_disagreements(answer_1_parsed, answer_2_parsed, 0.95)
             if match:
