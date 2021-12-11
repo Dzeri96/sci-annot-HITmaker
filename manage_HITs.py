@@ -3,6 +3,7 @@ from typing import cast
 import coloredlogs
 import argparse
 import os
+import json
 
 from sci_annot_eval.common.bounding_box import RelativeBoundingBox
 from config import Config
@@ -16,6 +17,7 @@ from sci_annot_eval.parsers import sci_annot_parser
 from django.core import management
 from django.core.wsgi import get_wsgi_application
 from sci_annot_eval.helpers import helpers
+import bson
 
 answer_parser = sci_annot_parser.SciAnnotParser()
 
@@ -159,7 +161,34 @@ def start_server():
     application = get_wsgi_application()
     management.call_command('runserver')
 
-      
+def save_answers(output_dir: str):
+    existing_ids = [file.split('.')[0] for file in os.listdir(output_dir)]
+    accepted_assignments = repository.get_accepted_assignments(existing_ids)
+    summary_dict = {}
+
+    nr_files = 0
+    for assignment in accepted_assignments:
+        file_path = os.path.join(output_dir, assignment['_id']+'.json')
+        summary_dict[assignment['_id']] = [
+            assignment['status'],
+            assignment['assignment']['worker_id']
+        ]
+        with open(file_path, 'w+') as of:
+            json.dump(assignment['assignment']['answer'], of, indent=4)
+        nr_files+= 1
+    logging.info(f'Saved {nr_files} assignments to disk.')
+
+    export_summary_path = os.path.join(output_dir, 'export_summary.parquet')
+    if os.path.isfile(export_summary_path):
+        logging.debug('Existing summary found, appending to it...')
+        new_summary_df = pd.DataFrame.from_dict(summary_dict, orient='index', columns=['status', 'worker_id'])
+        summary_df = pd.read_parquet(export_summary_path)
+        summary_df = new_summary_df.combine_first(summary_df)
+
+    else:
+        summary_df = pd.DataFrame.from_dict(summary_dict, orient='index', columns=['status', 'worker_id'])
+    summary_df.to_parquet(export_summary_path)
+    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Amazon MTurk HIT client')
@@ -174,6 +203,7 @@ if __name__ == '__main__':
     parser.add_argument('--evaluate-retrieved', '-E', help='Check inter-annotator agreement of retrieved annotations', action='store_true')
     parser.add_argument('--start-server', '-s', help='Start annotation inspection webserver', action='store_true')
     parser.add_argument('--comment', '-c', help='Pass comment to created HIT that will be saved in the answer', metavar='COMMENT', type=str)
+    parser.add_argument('--save-answers', '-S', help='Save answers to individual json files and additionally save a summary.', metavar='OUTPUT_DIR', nargs=1)
     
 
     args = parser.parse_args()
@@ -215,4 +245,5 @@ if __name__ == '__main__':
     elif(args.start_server):
         start_server()
         print()
-
+    elif(args.save_answers):
+        save_answers(args.save_answers[0])

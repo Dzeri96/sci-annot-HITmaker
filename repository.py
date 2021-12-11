@@ -10,7 +10,7 @@ class DB:
 
     @staticmethod
     def get():
-        if DB.__instance != None:
+        if hasattr(DB, '__instance'):
             return DB.__instance
         else:
             logging.debug(f'Creating a new DB client with URI: {Config.get("mongodb_uri")} and DB: {Config.get("mongodb_db_name")}')
@@ -164,3 +164,67 @@ def get_status_counts() -> list[dict[str, int]]:
     ])
 
     return list(result)
+
+def get_accepted_assignments(exclude_ids: list[str]):
+    """
+        Returns objects in the shape of {id_: page id, status: page status, assignment: selected assignment}
+
+        The assignment is selected as follows: If the page is in status VERIFIED, the accepted_assignment_id is used.
+        Otherwise, if the page status is REVIEWED, the last assignment from the array is selected.
+    """
+    pipeline = [
+        {
+            '$match': {
+                '_id': {
+                    '$nin': exclude_ids
+                }, 
+                'status': {
+                    '$in': [PageStatus.REVIEWED.value, PageStatus.VERIFIED.value]
+                }
+            }
+        }, {
+            '$project': {
+                'assignment(s)': {
+                    '$cond': {
+                        'if': {
+                            '$eq': [
+                                '$status', PageStatus.VERIFIED.value
+                            ]
+                        }, 
+                        'then': {
+                            '$filter': {
+                                'input': '$assignments', 
+                                'as': 'assig', 
+                                'cond': {
+                                    '$eq': [
+                                        '$$assig.assignment_id', '$accepted_assignment_id'
+                                    ]
+                                }
+                            }
+                        }, 
+                        'else': {
+                            '$last': '$assignments'
+                        }
+                    }
+                }, 
+                'status': 1
+            }
+        }, {
+            '$project': {
+                'assignment': {
+                    '$cond': {
+                        'if': {
+                            '$isArray': '$assignment(s)'
+                        }, 
+                        'then': {
+                            '$first': '$assignment(s)'
+                        }, 
+                        'else': '$assignment(s)'
+                    }
+                }, 
+                'status': 1
+            }
+        }
+    ]
+    result = DB.get().pages.aggregate(pipeline)
+    return result
