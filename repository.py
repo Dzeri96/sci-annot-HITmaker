@@ -3,7 +3,10 @@ from config import Config
 from pymongo import MongoClient, DESCENDING, ASCENDING, UpdateOne
 import pandas
 import logging
-from page_status import PageStatus
+from enums.page_status import PageStatus
+from enums.qualification_requirements import QualificationRequirement
+
+QUAL_REQ_CACHE = {}
 
 class DB:
     __instance: Database
@@ -228,3 +231,26 @@ def get_accepted_assignments(exclude_ids: list[str]):
     ]
     result = DB.get().pages.aggregate(pipeline)
     return result
+
+def save_qual_requirement(keys: dict):
+    keys['env'] = Config.get('env_name')
+    keys['_id'] = keys['QualificationTypeId']
+    DB.get().qual_requirements.insert_one(keys)
+
+def get_qual_requirement_id(req: QualificationRequirement):
+    """
+        Returns the qual. req. id which corresponds to the provided name and current env_name,
+            or None if it doesn't exist
+
+        The id is cached after the first fetch from the DB.
+    """
+    if req.value['Name'] in QUAL_REQ_CACHE.keys():
+        return QUAL_REQ_CACHE[req.value['Name']]
+    else:
+        search_res = DB.get().qual_requirements.find_one({
+            'Name': req.value['Name'],
+            'env': Config.get('env_name')
+        })
+        if search_res:
+            QUAL_REQ_CACHE[req.value['Name']] = search_res['_id']
+        return search_res

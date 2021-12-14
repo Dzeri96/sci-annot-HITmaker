@@ -7,7 +7,7 @@ from django.urls import reverse
 from sci_annot_eval.common.bounding_box import RelativeBoundingBox
 import repository
 from config import Config
-from page_status import PageStatus
+from enums.page_status import PageStatus
 from django.views.generic import View
 from faker import Faker
 from faker.providers import color

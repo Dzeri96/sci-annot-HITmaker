@@ -8,7 +8,8 @@ import json
 from sci_annot_eval.common.bounding_box import RelativeBoundingBox
 from config import Config
 import pandas as pd
-from page_status import PageStatus
+from enums.page_status import PageStatus
+from enums.qualification_requirements import QualificationRequirement, init_qual_enum_values
 import repository
 import mturk_client
 from question_form_answers_parser import xml_to_dict, sci_annot_parsers_dict
@@ -17,7 +18,6 @@ from sci_annot_eval.parsers import sci_annot_parser
 from django.core import management
 from django.core.wsgi import get_wsgi_application
 from sci_annot_eval.helpers import helpers
-import bson
 
 answer_parser = sci_annot_parser.SciAnnotParser()
 
@@ -188,6 +188,21 @@ def save_answers(output_dir: str):
     else:
         summary_df = pd.DataFrame.from_dict(summary_dict, orient='index', columns=['status', 'worker_id'])
     summary_df.to_parquet(export_summary_path)
+
+def create_qual_requirements():
+    created_nr = 0
+    for qual in QualificationRequirement:
+        logging.debug(f'Creating qual: {qual}')
+        if not repository.get_qual_requirement_id(qual):
+            keys = mturk_client.create_qual_type(qual)
+            repository.save_qual_requirement(keys)
+            created_nr += 1
+    
+    if created_nr:
+        logging.info(f'Created {created_nr} qualification requirement(s)')
+    else:
+        logging.warning(f'All qualification requirements already exist!')
+
     
 
 if __name__ == '__main__':
@@ -204,6 +219,7 @@ if __name__ == '__main__':
     parser.add_argument('--start-server', '-s', help='Start annotation inspection webserver', action='store_true')
     parser.add_argument('--comment', '-c', help='Pass comment to created HIT that will be saved in the answer', metavar='COMMENT', type=str)
     parser.add_argument('--save-answers', '-S', help='Save answers to individual json files and additionally save a summary.', metavar='OUTPUT_DIR', nargs=1)
+    parser.add_argument('--create-qual-reqs', '-q', help='Create qualification requirements', action='store_true')
     
 
     args = parser.parse_args()
@@ -220,6 +236,9 @@ if __name__ == '__main__':
     coloredlogs.install(**logging_config)
     logging.debug('DEBUG LOGGING ENABLED')
     logging.info('INFO LOGGING ENABLED')
+
+    # Init Enums
+    init_qual_enum_values()
 
     # Check for unsafe mode
     if(args.accept_prompts):
@@ -247,3 +266,5 @@ if __name__ == '__main__':
         print()
     elif(args.save_answers):
         save_answers(args.save_answers[0])
+    elif(args.create_qual_reqs):
+        create_qual_requirements()

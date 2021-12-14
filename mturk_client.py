@@ -2,10 +2,12 @@ import boto3
 from config import Config
 import logging
 import json
-import urllib
+from urllib import parse
+
+from enums.qualification_requirements import QualificationRequirement
 
 class Client:
-    __instance: boto3.Session.client = None
+    __instance = None
 
     @staticmethod
     def get():
@@ -52,7 +54,7 @@ def create_hit(type_id: str, image_url: str, comment: str = None):
     external_url = Config.get('external_url')
     fullUrl = f'{external_url}?image={image_url}'
     if comment:
-        fullUrl += f'&amp;comment={urllib.parse.quote_plus(comment)}'
+        fullUrl += f'&amp;comment={parse.quote_plus(comment)}'
     question_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
     <ExternalQuestion xmlns="http://mechanicalturk.amazonaws.com/AWSMechanicalTurkDataSchemas/2006-07-14/ExternalQuestion.xsd">
         <ExternalURL>{fullUrl}</ExternalURL>
@@ -85,3 +87,11 @@ def list_hits():
     logging.debug(f'List hits response: {json.dumps(response)}')
 
     return response
+
+def create_qual_type(qual: QualificationRequirement) -> dict:
+    """
+        Creates a new qualification type and returns the contents of the QualificationType response key.
+    """
+    response = Client.get().create_qualification_type(**qual.value)
+    logging.debug(f'Created Qualification Type with name {qual.value["Name"]}')
+    return response['QualificationType']
