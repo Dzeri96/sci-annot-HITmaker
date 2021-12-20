@@ -1,10 +1,11 @@
+from typing import Any
 from pymongo.database import Database
 from config import Config
 from pymongo import MongoClient, DESCENDING, ASCENDING, UpdateOne
 import pandas
 import logging
 from enums.page_status import PageStatus
-from enums.qualification_requirements import QualificationRequirement
+from enums.qualification_types import QualificationType
 
 QUAL_REQ_CACHE = {}
 
@@ -89,10 +90,23 @@ def update_pages_from_dict(page_id_ops_dict: dict):
         logging.debug(f'Updated: {bulk_results.modified_count} document(s)')
         return bulk_results
 
-def get_pages_by_status(status: PageStatus, count: int = None, id_only: bool = False) -> list:
-    aggregation_pipeline = [{
+# TODO: Maybe consolidate with update_pages_from_dict
+def update_pages_from_tuples(filter_actions_list: list[tuple]):
+    """
+        Updates pages by using the first entry in each tuple as a filter, and the second one as the action.
+    """
+    update_operations = [UpdateOne(
+        filters,
+        actions
+    ) for filters, actions in filter_actions_list]
+    bulk_results = DB.get().pages.bulk_write(update_operations)
+    logging.debug(f'Updated: {bulk_results.modified_count} document(s)')
+    return bulk_results
+
+def get_pages_by_status(statuses: list[PageStatus], count: int = None, id_only: bool = False) -> list:
+    aggregation_pipeline: list[dict[str, Any]] = [{
         '$match': {
-            'status': status.value
+            'status': {'$in': [st.value for st in statuses]}
         }
     }]
 
@@ -115,9 +129,8 @@ def get_pages_by_status(status: PageStatus, count: int = None, id_only: bool = F
     if(len(result) != 0):
         return result
     else:
-        raise LookupError(f'There are no more pages of status {status.value}!')
+        raise LookupError(f'There are no more pages in any of these statuses: {statuses}!')
 
-# TODO: Remove?
 def get_pages_in_id_list(ids: list[str]) -> list[dict]:
     result = []
     if ids:
@@ -237,7 +250,7 @@ def save_qual_requirement(keys: dict):
     keys['_id'] = keys['QualificationTypeId']
     DB.get().qual_requirements.insert_one(keys)
 
-def get_qual_requirement_id(req: QualificationRequirement):
+def get_qual_requirement_id(req: QualificationType):
     """
         Returns the qual. req. id which corresponds to the provided name and current env_name,
             or None if it doesn't exist
@@ -253,4 +266,27 @@ def get_qual_requirement_id(req: QualificationRequirement):
         })
         if search_res:
             QUAL_REQ_CACHE[req.value['Name']] = search_res['_id']
-        return search_res
+            return search_res['_id']
+
+def get_qualification_pages():
+    result = DB.get().pages.find(
+        {'qualification_page': {'$exists': True, '$eq': True}}
+    )
+    return list(result)
+
+def get_workers_in_id_list(ids: list[str]):
+    result = DB.get().workers.find(
+        {'_id': {'$in': ids}}
+    )
+    return result
+
+def update_workers_from_dict(worker_id_ops_dict: dict):
+    if worker_id_ops_dict:
+        update_operations = [UpdateOne(
+            {'_id': worker_id},
+            operations,
+            upsert=True
+        ) for worker_id, operations in worker_id_ops_dict.items()]
+        bulk_results = DB.get().workers.bulk_write(update_operations)
+        logging.debug(f'Updated: {bulk_results.modified_count} document(s)')
+        return bulk_results

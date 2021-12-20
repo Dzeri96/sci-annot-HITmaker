@@ -4,7 +4,7 @@ import logging
 import json
 from urllib import parse
 
-from enums.qualification_requirements import QualificationRequirement
+from enums.qualification_types import QualificationType
 
 class Client:
     __instance = None
@@ -50,7 +50,13 @@ def create_hit_type (
     else:
         raise Exception('Could not create HIT type: ' + str(response))
 
-def create_hit(type_id: str, image_url: str, comment: str = None):
+def create_hit(
+    type_id: str,
+    image_url: str,
+    comment: str = None,
+    max_assignments: int = int(Config.get('max_assignments')),
+    qualification_requirements: list = []
+):
     external_url = Config.get('external_url')
     fullUrl = f'{external_url}?image={image_url}'
     if comment:
@@ -62,11 +68,18 @@ def create_hit(type_id: str, image_url: str, comment: str = None):
     </ExternalQuestion>
     '''
 
+    arguments = {
+        'HITTypeId': type_id,
+        'MaxAssignments': max_assignments,
+        'LifetimeInSeconds': int(Config.get('lifetime_sec')),
+        'Question': question_xml
+    }
+
+    if qualification_requirements:
+        arguments['QualificationRequirements'] = qualification_requirements
+
     response = Client.get().create_hit_with_hit_type(
-        HITTypeId=type_id,
-        MaxAssignments=int(Config.get('max_assignments')),
-        LifetimeInSeconds=int(Config.get('lifetime_sec')),
-        Question=question_xml
+        **arguments
     )
 
     return response
@@ -88,10 +101,29 @@ def list_hits():
 
     return response
 
-def create_qual_type(qual: QualificationRequirement) -> dict:
+def create_qual_type(qual: QualificationType) -> dict:
     """
         Creates a new qualification type and returns the contents of the QualificationType response key.
     """
     response = Client.get().create_qualification_type(**qual.value)
     logging.debug(f'Created Qualification Type with name {qual.value["Name"]}')
     return response['QualificationType']
+
+def assign_qualification_to_worker(
+    qual_id: str,
+    worker_id: str,
+    integer_value: int = None,
+    send_notification: bool = False
+):
+    args = {
+        'QualificationTypeId': qual_id,
+        'WorkerId':worker_id,
+        'SendNotification': send_notification
+    }
+
+    if integer_value is not None:
+        args['IntegerValue'] = integer_value
+
+    logging.debug(f'Calliing associate_qualification with following args: {args}')    
+    response = Client.get().associate_qualification_with_worker(**args)
+    return response

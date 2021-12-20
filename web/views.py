@@ -122,7 +122,7 @@ def review(request):
     
     try:
         # TODO: This can be cached to reduce DB round-trips
-        random_page = repository.get_pages_by_status(PageStatus[page_status.upper()], 1)[0]
+        random_page = repository.get_pages_by_status([PageStatus[page_status.upper()]], 1)[0]
         # Django has terrible support for query params
         reversed_url = reverse('review_page', kwargs={'page_id': random_page['_id']})
         full_redirect_url = reversed_url + '?' + request.GET.urlencode()

@@ -5,11 +5,90 @@ import argparse
 import os
 import json
 
-from sci_annot_eval.common.bounding_box import RelativeBoundingBox
 from config import Config
+
+args = argparse.Namespace()
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser('Amazon MTurk HIT client')
+    subparsers = parser.add_subparsers(dest='command')
+    parser.add_argument('--env', '-e', nargs=1, default='.env', help='Environment file (default is .env)', metavar='file')
+    parser.add_argument('--verbose', '-v', help='Enable verbose logging (info, debug)', action='count')
+    parser.add_argument('--accept-prompts', '-y', help='Say yes to any prompts (UNSAFE)', action='store_true')
+
+    legacy_parser = subparsers.add_parser(
+        'legacy',
+        description= 'Temporary command for most arguments',
+        argument_default=argparse.SUPPRESS
+    )
+
+    publish_random_parser = subparsers.add_parser(
+        'publish-random',
+        description='Publish a certain number of HITs from the pool of unpublished pages',
+        argument_default=argparse.SUPPRESS
+    )
+    publish_random_parser.add_argument('count', help='Number of pages', metavar='COUNT', type=int)
+    publish_random_parser.add_argument('--comment', '-c', help='Pass comment to created HIT that will be saved in the answer', metavar='COMMENT', type=str, required=False)
+    publish_random_parser.add_argument('--minimum-qual-points', '-m', help='The minimum number of qual. points that a turker needs in order to work on these HITs. (default is 10)', type=int, default=10)
+    publish_random_parser.add_argument('--skip-qualification-done', '-s', help='Indicates that turkers don\'t need to have done the qualification to work on these HITs.', action='store_true')
+
+    publish_specific_parser = subparsers.add_parser(
+        'publish-specific',
+        description='Publish a list of specific pages as HITs',
+        argument_default=argparse.SUPPRESS
+    )
+    publish_specific_parser.add_argument('ids', metavar='IDs', nargs='+', help='Space-separated list of Page IDs to publish')
+    publish_specific_parser.add_argument('--comment', '-c', help='Pass comment to created HIT that will be saved in the answer', metavar='COMMENT', type=str, required=False)
+    publish_specific_parser.add_argument('--minimum-qual-points', '-m', help='The minimum number of qual. points that a turker needs in order to work on these HITs. (default is 10)', type=int, default=10)
+    publish_specific_parser.add_argument('--skip-qualification-done', '-s', help='Indicates that turkers don\'t need to have done the qualification to work on these HITs.', action='store_true')
+
+    legacy_parser.add_argument('--create-hit-type', '-t', type=bool, nargs=1, default=False, help='Create new HIT type and optionally set it as the active one', metavar='active')
+    legacy_parser.add_argument('--ingest', '-i', nargs=1, help='Parquet file with pdf info', metavar='file')
+    legacy_parser.add_argument('--publish-specific', '-P', nargs='+', help='Publish a list of pages denoted by space-separated IDs', metavar='IDs', type=str)
+    legacy_parser.add_argument('--fetch-results', '-f', help='Fetch results of published HITs', action='store_true')
+    legacy_parser.add_argument('--evaluate-retrieved', '-E', help='Check inter-annotator agreement of retrieved annotations', action='store_true')
+    legacy_parser.add_argument('--start-server', '-s', help='Start annotation inspection webserver', action='store_true')
+    legacy_parser.add_argument('--save-answers', '-S', help='Save answers to individual json files and additionally save a summary.', metavar='OUTPUT_DIR', nargs=1)
+    legacy_parser.add_argument('--create-qual-reqs', '-q', help='Create qualification requirements', action='store_true')
+
+    mark_for_qualification_parser = subparsers.add_parser(
+        'mark-pages-for-qualification',
+        description='Mark a list of pages as qualification pages by their IDs',
+        argument_default=argparse.SUPPRESS
+    )
+    mark_for_qualification_parser.add_argument('ids', metavar='IDs', nargs='+', help='Space-separated list of Page IDs to mark as qualification pages')
+
+    publish_qualification_pages_parser = subparsers.add_parser(
+        'publish-qualification-pages',
+        description='Publish qualification pages to allow turkers to qualify for other tasks',
+        argument_default=argparse.SUPPRESS
+    )
+    publish_qualification_pages_parser.add_argument('--max-assignments', '-a', help='Max. number of turkers that can do one HIT (default is 10)', type=int, default=10)
+
+    args = parser.parse_args()
+    
+    # Initialize env variables in global config
+    Config.parse_env_file(args.env[0])
+
+    # Set up logging
+    logging_config = {"fmt":'%(asctime)s %(levelname)s: %(message)s', "level": logging.WARNING}
+    if(args.verbose == 1):
+        logging_config['level'] = logging.INFO
+    elif(args.verbose == 2):
+        logging_config['level'] = logging.DEBUG
+    coloredlogs.install(**logging_config)
+    logging.debug('DEBUG LOGGING ENABLED')
+    logging.info('INFO LOGGING ENABLED')
+
+    # Check for unsafe mode
+    if(args.accept_prompts):
+        logging.warning('Accepting all prompts! This can cause unwanted money loss!')
+        Config.set('accept_prompts', True)
+
+from sci_annot_eval.common.bounding_box import RelativeBoundingBox
 import pandas as pd
 from enums.page_status import PageStatus
-from enums.qualification_requirements import QualificationRequirement, init_qual_enum_values
+from enums.qualification_types import QualificationType
 import repository
 import mturk_client
 from question_form_answers_parser import xml_to_dict, sci_annot_parsers_dict
@@ -48,16 +127,53 @@ def create_hit_type(active: bool = False):
     repository.save_hit_type(params)
     logging.info(f'Created HIT type with params: {params}')
 
-def publish_random(count: int, comment: str = None):
-    unpublished = repository.get_pages_by_status(PageStatus.NOT_ANNOTATED, count, True)
-    publish([page['_id'] for page in unpublished], comment)
+def create_postqual_requirements(minimum_qual_points: int= 10, did_qual_tasks_required: bool= True):
+    qual_requirements = []
 
-def publish(ids: list[str], comment: str = None):
+    if minimum_qual_points > 0:
+        qual_points_id = repository.get_qual_requirement_id(QualificationType.QUAL_POINTS)
+        qual_requirements.append({
+            'QualificationTypeId': qual_points_id,
+            'Comparator': 'GreaterThanOrEqualTo',
+            'RequiredToPreview': True,
+            'ActionsGuarded': 'DiscoverPreviewAndAccept',
+            'IntegerValues': [
+                minimum_qual_points,
+            ]
+        })
+
+    if did_qual_tasks_required:
+        did_qual_tasks_id = repository.get_qual_requirement_id(QualificationType.DID_QUAL_TASKS)
+        qual_requirements = [{
+            'QualificationTypeId': did_qual_tasks_id,
+            'Comparator': 'Exists',
+            'RequiredToPreview': True,
+            'ActionsGuarded': 'DiscoverPreviewAndAccept'
+        }]
+
+    return qual_requirements
+
+def publish_random(
+    count: int,
+    comment: str = None,
+    minimum_qual_points: int= 10,
+    did_qual_tasks_required: bool= True
+):
+    unpublished = repository.get_pages_by_status([PageStatus.NOT_ANNOTATED], count, True)
+    qual_requirements = create_postqual_requirements(minimum_qual_points, did_qual_tasks_required)
+    publish([page['_id'] for page in unpublished], comment, qual_requirements= qual_requirements)
+
+def publish(
+    ids: list[str],
+    comment: str = None,
+    max_assignments: int = int(Config.get('max_assignments')),
+    qual_requirements: list = []
+):
     active_hit_type = repository.get_active_hit_type_or_by_id()
     
     logging.info(f'Active hit type: {active_hit_type}')
     if str(Config.get('accept_prompts')) != 'True':
-        price = float(active_hit_type['reward']) * len(ids)
+        price = float(active_hit_type['reward']) * len(ids) * max_assignments
         answer = input(f'This action will cost you {price}$. Are you sure you want to proceed? (N/y)? ')
         if(answer != 'y'):
             print('Cancelling action...')
@@ -67,7 +183,13 @@ def publish(ids: list[str], comment: str = None):
     for page in ids:
         img_url = Config.get('image_url_base') + page + Config.get('image_extension')
         try:
-            response = mturk_client.create_hit(active_hit_type['_id'], img_url, comment)
+            response = mturk_client.create_hit(
+                active_hit_type['_id'],
+                img_url,
+                comment,
+                max_assignments,
+                qual_requirements
+            )
             if(response['ResponseMetadata']['HTTPStatusCode'] == 200):
                 logging.debug(f'Created hit: {response}')
                 page_id_HIT_response_map[page] = response
@@ -81,7 +203,7 @@ def publish(ids: list[str], comment: str = None):
     repository.update_pages_to_submitted(page_id_HIT_response_map)
 
 def fetch_hit_results():
-    submitted_pages = repository.get_pages_by_status(PageStatus.SUBMITTED)
+    submitted_pages = repository.get_pages_by_status([PageStatus.SUBMITTED])
     nr_found_pages = len(submitted_pages)
     logging.info(f'Found {nr_found_pages} submitted pages.')
 
@@ -104,7 +226,8 @@ def fetch_hit_results():
                         'HIT_id': assignment['HITId'],
                         'auto_approval_time': assignment['AutoApprovalTime'],
                         'submit_time': assignment['SubmitTime'],
-                        'answer': xml_to_dict(assignment['Answer'], sci_annot_parsers_dict)
+                        'reviewed': False,
+                        'answer': xml_to_dict(assignment['Answer'], sci_annot_parsers_dict),
                     })
 
             operation_dict[page['_id']] = {
@@ -119,11 +242,21 @@ def fetch_hit_results():
     
     repository.update_pages_from_dict(operation_dict)
 
+def crop_compare_answers(answer_1_raw, answer_2_raw, page):
+    img_path = Config.get('image_folder') + page['_id'] + Config.get('image_extension')
+    answer_1_parsed = cast(list[RelativeBoundingBox], answer_parser.parse_dict(answer_1_raw, False))
+    answer_1_parsed = helpers.make_absolute(helpers.crop_all_to_content(img_path, answer_1_parsed), answer_1_raw['canvasWidth'], answer_1_raw['canvasHeight'])
+    answer_2_parsed = cast(list[RelativeBoundingBox], answer_parser.parse_dict(answer_2_raw, False))
+    answer_2_parsed = helpers.make_absolute(helpers.crop_all_to_content(img_path, answer_2_parsed), answer_2_raw['canvasWidth'], answer_2_raw['canvasHeight'])
+    return evaluation.check_no_disagreements(answer_1_parsed, answer_2_parsed, 0.95)
+
 def eval_retrieved():
-    retrieved = repository.get_pages_by_status(PageStatus.RETRIEVED)
+    retrieved = repository.get_pages_by_status([PageStatus.RETRIEVED])
     passed = []
     deferred = []
     rejected = []
+    worker_id_action_dict = {}
+    assignment_action_list = []
     for page in retrieved:
         assignments = page['assignments']
         nr_assignments = len(assignments)
@@ -133,28 +266,56 @@ def eval_retrieved():
         elif (nr_assignments == 1):
             deferred.append(page['_id'])
         else:
-            if (len(assignments) > 2):
-                logging.warning(f'page {page["_id"]} has {len(assignments)} assignments! Only the last two will be evaluated')
-            answer_1_raw = page['assignments'][-2]['answer']
-            answer_2_raw = page['assignments'][-1]['answer']
-            img_path = Config.get('image_folder') + page['_id'] + Config.get('image_extension')
-            answer_1_parsed = cast(list[RelativeBoundingBox], answer_parser.parse_dict(answer_1_raw, False))
-            answer_1_parsed = helpers.make_absolute(helpers.crop_all_to_content(img_path, answer_1_parsed), answer_1_raw['canvasWidth'], answer_1_raw['canvasHeight'])
-            answer_2_parsed = cast(list[RelativeBoundingBox], answer_parser.parse_dict(answer_2_raw, False))
-            answer_2_parsed = helpers.make_absolute(helpers.crop_all_to_content(img_path, answer_2_parsed), answer_2_raw['canvasWidth'], answer_2_raw['canvasHeight'])
-            match = evaluation.check_no_disagreements(answer_1_parsed, answer_2_parsed, 0.95)
-            if match:
-                logging.debug(f'page {page["_id"]} has matching annotations')
-                passed.append(page['_id'])
+            if 'qualification_page' in page.keys() and page['qualification_page']:
+                # This is a qualification page
+                ground_truth_raw = page['assignments'][0]['answer']
+                for assignment in page['assignments']:
+                    if 'reviewed' not in assignment.keys() or not assignment['reviewed']:
+                        worker_id = assignment['worker_id']
+                        # TODO: Handle ADMIN!
+                        if worker_id not in worker_id_action_dict.keys():
+                            worker_id_action_dict[worker_id] = {'$set': {'did_qualification_tasks': True}}
+                        curr_answer_raw = assignment['answer']
+                        match = crop_compare_answers(ground_truth_raw, curr_answer_raw, page)
+                        if match:
+                            worker_id_action_dict[worker_id]['$addToSet'] = {
+                                'qual_pages_completed': page['_id']
+                            }
+                        assignment_action_list.append((
+                            {'_id': page['_id'], 'assignments.assignment_id': assignment['assignment_id']},
+                            {'$set': {'assignments.$.reviewed': True}}
+                        ))    
             else:
-                logging.debug(f'page {page["_id"]} doesn\'t have matching annotations')
-                deferred.append(page['_id'])
+                # This is a regular page
+                if (len(assignments) > 2):
+                    logging.warning(f'page {page["_id"]} has {len(assignments)} assignments! Only the last two will be evaluated')
+                answer_1_raw = page['assignments'][-2]['answer']
+                answer_2_raw = page['assignments'][-1]['answer']
+                match = crop_compare_answers(answer_1_raw, answer_2_raw, page)
+
+                if match:
+                    logging.debug(f'page {page["_id"]} has matching annotations')
+                    passed.append(page['_id'])
+                else:
+                    logging.debug(f'page {page["_id"]} doesn\'t have matching annotations')
+                    deferred.append(page['_id'])
 
     logging.info(f'Validation results: {len(passed)} - good, {len(deferred)} - deferred, {len(rejected)} - rejected.')
 
+    # TODO: Consolidate
     repository.update_pages_from_dict({id:{'$set': {'status': PageStatus.REVIEWED.value}} for id in passed})
     repository.update_pages_from_dict({id:{'$set': {'status': PageStatus.DEFERRED.value}} for id in deferred})
     repository.update_pages_from_dict({id:{'$set': {'status': PageStatus.REJECTED.value}} for id in rejected})
+    repository.update_pages_from_tuples(assignment_action_list)
+    if worker_id_action_dict:
+        repository.update_workers_from_dict(worker_id_action_dict)
+        updated_workers_curr_state = repository.get_workers_in_id_list(list(worker_id_action_dict.keys()))
+        did_qual_tasks_id = repository.get_qual_requirement_id(QualificationType.DID_QUAL_TASKS)
+        qual_points_id = repository.get_qual_requirement_id(QualificationType.QUAL_POINTS)
+        for worker in updated_workers_curr_state:
+            # TODO: Finish
+            #mturk_client.assign_qualification_to_worker(did_qual_tasks_id, worker['_id'])
+            pass
 
 def start_server():
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'web.settings')
@@ -191,7 +352,7 @@ def save_answers(output_dir: str):
 
 def create_qual_requirements():
     created_nr = 0
-    for qual in QualificationRequirement:
+    for qual in QualificationType:
         logging.debug(f'Creating qual: {qual}')
         if not repository.get_qual_requirement_id(qual):
             keys = mturk_client.create_qual_type(qual)
@@ -203,68 +364,81 @@ def create_qual_requirements():
     else:
         logging.warning(f'All qualification requirements already exist!')
 
+def mark_pages_for_qual(ids: list[str]):
+    """
+        Marks pages with given IDs as qualification pages by adding a qualification_page=True property to them.
+    """
+    result = repository.get_pages_in_id_list(ids)
+    if len(result) != len(ids):
+        logging.fatal(f'Out of {len(ids)} provided IDs, only {len(result)} were found!')
+        return
+    action_dict = {}
+    for page in result:
+        if len(page['assignments']) < 1:
+            raise Exception(f'Page with id {page["_id"]} has no assignments!')
+        else:
+            action_dict[page['_id']] = {'$set': {'qualification_page': True}}
+    repository.update_pages_from_dict(action_dict)
+
+def pub_qual_pages(max_assignments: int = 10):
+    qual_pages = repository.get_qualification_pages()
+    id_list = []
+    for page in qual_pages:
+        # Page has no pending assignments and is ready to be published
+        if page['status'] in [PageStatus.NOT_ANNOTATED.value, PageStatus.REVIEWED.value, PageStatus.VERIFIED.value]:
+            id_list.append(page['_id'])
+        else:
+            raise Exception(f'Cannot publish qualification pages because page {page["_id"]} is in the {page["status"]} status')
+
+    did_qual_tasks_id = repository.get_qual_requirement_id(QualificationType.DID_QUAL_TASKS)
+    qual_requirements = [{
+        'QualificationTypeId': did_qual_tasks_id,
+        'Comparator': 'DoesNotExist',
+        'RequiredToPreview': True,
+        'ActionsGuarded': 'DiscoverPreviewAndAccept'
+    }]
+
+    publish(id_list, max_assignments= max_assignments, qual_requirements= qual_requirements)
     
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser('Amazon MTurk HIT client')
-    parser.add_argument('--env', '-e', nargs=1, default='.env', help='Environment file', metavar='file')
-    parser.add_argument('--create-hit-type', '-t', type=bool, nargs=1, default=False, help='Create new HIT type and optionally set it as the active one', metavar='active')
-    parser.add_argument('--ingest', '-i', nargs=1, help='Parquet file with pdf info', metavar='file')
-    parser.add_argument('--publish-random', '-p', nargs=1, help='Publish a certain number of HITs from the pool of unpublished pages', metavar='count', type=int)
-    parser.add_argument('--publish-specific', '-P', nargs='+', help='Publish a list of pages denoted by space-separated IDs', metavar='IDs', type=str)
-    parser.add_argument('--verbose', '-v', help='Enable verbose logging (info, debug)', action='count')
-    parser.add_argument('--accept-prompts', '-y', help='Say yes to any prompts (UNSAFE)', action='store_true')
-    parser.add_argument('--fetch-results', '-f', help='Fetch results of published HITs', action='store_true')
-    parser.add_argument('--evaluate-retrieved', '-E', help='Check inter-annotator agreement of retrieved annotations', action='store_true')
-    parser.add_argument('--start-server', '-s', help='Start annotation inspection webserver', action='store_true')
-    parser.add_argument('--comment', '-c', help='Pass comment to created HIT that will be saved in the answer', metavar='COMMENT', type=str)
-    parser.add_argument('--save-answers', '-S', help='Save answers to individual json files and additionally save a summary.', metavar='OUTPUT_DIR', nargs=1)
-    parser.add_argument('--create-qual-reqs', '-q', help='Create qualification requirements', action='store_true')
-    
-
-    args = parser.parse_args()
-    
-    # Initialize env variables in global config
-    Config.parse_env_file(args.env[0])
-
-    # Set up logging
-    logging_config = {"fmt":'%(asctime)s %(levelname)s: %(message)s', "level": logging.WARNING}
-    if(args.verbose == 1):
-        logging_config['level'] = logging.INFO
-    elif(args.verbose == 2):
-        logging_config['level'] = logging.DEBUG
-    coloredlogs.install(**logging_config)
-    logging.debug('DEBUG LOGGING ENABLED')
-    logging.info('INFO LOGGING ENABLED')
-
-    # Init Enums
-    init_qual_enum_values()
-
-    # Check for unsafe mode
-    if(args.accept_prompts):
-        logging.warning('Accepting all prompts! This can cause unwanted money loss!')
-        Config.set('accept_prompts', True)
-
     # Handle arguments
-    if(args.ingest):
-        ingest(args.ingest[0])
-    elif(args.publish_random):
+    if args.command == 'legacy':
+        if(args.ingest):
+            ingest(args.ingest[0])            
+        elif(args.create_hit_type):
+            create_hit_type(args.create_hit_type[0])
+        elif(args.fetch_results):
+            fetch_hit_results()
+        elif(args.evaluate_retrieved):
+            eval_retrieved()
+        elif(args.start_server):
+            start_server()
+            print()
+        elif(args.save_answers):
+            save_answers(args.save_answers[0])
+        elif(args.create_qual_reqs):
+            create_qual_requirements()
+    elif args.command == 'mark-pages-for-qualification':
+        mark_pages_for_qual(args.ids)
+    elif args.command == 'publish-qualification-pages':
+        pub_qual_pages(args.max_assignments)
+    elif args.command == 'publish-random':
+            comment = None
+            if(args.comment):
+                comment = args.comment
+            publish_random(
+                args.publish_random[0],
+                comment,
+                args.minimum_qual_points,
+                not bool(args.ignore_qualification_done)    
+            )
+    elif args.command == 'publish-specific':
         comment = None
         if(args.comment):
             comment = args.comment
-        publish_random(args.publish_random[0], comment)
-    elif(args.create_hit_type):
-        create_hit_type(args.create_hit_type[0])
-    elif(args.fetch_results):
-        fetch_hit_results()
-    elif(args.evaluate_retrieved):
-        eval_retrieved()
-    elif(args.publish_specific):
-        publish(args.publish_specific)
-    elif(args.start_server):
-        start_server()
-        print()
-    elif(args.save_answers):
-        save_answers(args.save_answers[0])
-    elif(args.create_qual_reqs):
-        create_qual_requirements()
+        qual_reqs = create_postqual_requirements(args.minimum_qual_points, not bool(args.ignore_qualification_done))
+        publish(args.publish_specific, comment, qual_requirements=qual_reqs)
+
+    logging.info(f'command: {args.command}')
+    logging.info(f'args: {args}')
