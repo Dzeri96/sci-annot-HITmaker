@@ -7,7 +7,7 @@ import logging
 from enums.page_status import PageStatus
 from enums.qualification_types import QualificationType
 
-QUAL_REQ_CACHE = {}
+QUAL_TYPE_CACHE = {}
 
 class DB:
     __instance: Database
@@ -250,23 +250,29 @@ def save_qual_requirement(keys: dict):
     keys['_id'] = keys['QualificationTypeId']
     DB.get().qual_requirements.insert_one(keys)
 
-def get_qual_requirement_id(req: QualificationType):
+def get_qual_type_id(req: QualificationType):
     """
         Returns the qual. req. id which corresponds to the provided name and current env_name,
             or None if it doesn't exist
 
         The id is cached after the first fetch from the DB.
     """
-    if req.value['Name'] in QUAL_REQ_CACHE.keys():
-        return QUAL_REQ_CACHE[req.value['Name']]
+    if req.value['Name'] in QUAL_TYPE_CACHE.keys():
+        return QUAL_TYPE_CACHE[req.value['Name']]
     else:
         search_res = DB.get().qual_requirements.find_one({
             'Name': req.value['Name'],
             'env': Config.get('env_name')
         })
         if search_res:
-            QUAL_REQ_CACHE[req.value['Name']] = search_res['_id']
+            QUAL_TYPE_CACHE[req.value['Name']] = search_res['_id']
             return search_res['_id']
+
+def assert_qual_types_exist():
+    for qual_type in QualificationType:
+        result = get_qual_type_id(qual_type)
+        if result is None:
+            raise Exception(f'Qualification type {qual_type} is not present in the DB! Please first create it.')
 
 def get_qualification_pages():
     result = DB.get().pages.find(

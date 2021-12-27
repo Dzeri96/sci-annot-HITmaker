@@ -5,6 +5,9 @@ from django.http.response import HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
 from sci_annot_eval.common.bounding_box import RelativeBoundingBox
+import config
+from enums.qualification_types import QualificationType
+import mturk_client
 import repository
 from config import Config
 from enums.page_status import PageStatus
@@ -91,12 +94,49 @@ class Assignment(View):
                         'answer': parse_typed_dict(post_data, sci_annot_parsers_dict)
                     }
                 }
-
+            # Annotation accepted as-is and a verification point is given
+            else:
+                repository.assert_qual_types_exist()
+                worker_id = repository.get_assignment(page_id, assignment_id)
+                logging.debug(f'Awarding one verification point to worker {worker_id}')
+                worker_action_dict = {worker_id: {'verification_points': {'$add': 1}}}
+                repository.update_workers_from_dict(worker_action_dict)
+                worker = repository.get_workers_in_id_list([worker_id]).next()
+                total_qual_points = worker['verification_points'] + \
+                    len(worker['qual_pages_completed']) if 'qual_pages_completed' in worker.keys()\
+                    else 0
+                qual_points_id = repository.get_qual_type_id(QualificationType.QUAL_POINTS)
+                # This is just to satisfy the type system.
+                # The assertion that these are not None is done at the beginning of the block.
+                if qual_points_id is not None:
+                    mturk_client.assign_qualification_to_worker(qual_points_id, worker_id, total_qual_points)    
+                
             set_data['accepted_assignment_id'] = assignment_id
             update_resp = repository.update_pages_from_dict({
                 page_id: update_data
             })
         else:
+            # Apply a penalty to the last two/one turker(s)
+            repository.assert_qual_types_exist()
+            qual_points_id = repository.get_qual_type_id(QualificationType.QUAL_POINTS)
+            # This is just to satisfy the type system.
+            # The assertion that these are not None is done at the beginning of the block.
+            if qual_points_id is not None:
+                rejected_assignments = repository.get_page_by_id(page_id)['assignments'][-2:]
+                workers_to_punish = [assignment['worker_id'] for assignment in rejected_assignments]
+                worker_action_dict = {}
+                for worker_id in workers_to_punish:
+                    worker_action_dict[worker_id] = \
+                        {'verification_points': {'$add': -int(Config.get('rejected_assignment_penalty'))}}
+                repository.update_workers_from_dict(worker_action_dict)
+                curr_worker_states = repository.get_workers_in_id_list(list(worker_action_dict.keys()))
+                for worker in curr_worker_states:
+                    total_qual_points = worker['verification_points'] + \
+                        len(worker['qual_pages_completed']) if 'qual_pages_completed' in worker.keys()\
+                        else 0
+                    mturk_client.assign_qualification_to_worker(qual_points_id, worker['_id'], total_qual_points)
+
+
             update_resp = repository.update_pages_from_dict({
                 page_id: {
                     '$set': {

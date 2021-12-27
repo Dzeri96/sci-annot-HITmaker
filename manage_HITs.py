@@ -29,8 +29,8 @@ if __name__ == '__main__':
     )
     publish_random_parser.add_argument('count', help='Number of pages', metavar='COUNT', type=int)
     publish_random_parser.add_argument('--comment', '-c', help='Pass comment to created HIT that will be saved in the answer', metavar='COMMENT', type=str, required=False)
-    publish_random_parser.add_argument('--minimum-qual-points', '-m', help='The minimum number of qual. points that a turker needs in order to work on these HITs. (default is 10)', type=int, default=10)
-    publish_random_parser.add_argument('--skip-qualification-done', '-s', help='Indicates that turkers don\'t need to have done the qualification to work on these HITs.', action='store_true')
+    publish_random_parser.add_argument('--minimum-qual-points', '-m', help='The minimum number of qual. points that a turker needs in order to work on these HITs. (default is 0)', type=int, default=0)
+    publish_random_parser.add_argument('--require-qualification-done', '-q', help='Indicates that turkers need to have done at least one qualification to work on these HITs.', action='store_true')
 
     publish_specific_parser = subparsers.add_parser(
         'publish-specific',
@@ -39,8 +39,8 @@ if __name__ == '__main__':
     )
     publish_specific_parser.add_argument('ids', metavar='IDs', nargs='+', help='Space-separated list of Page IDs to publish')
     publish_specific_parser.add_argument('--comment', '-c', help='Pass comment to created HIT that will be saved in the answer', metavar='COMMENT', type=str, required=False)
-    publish_specific_parser.add_argument('--minimum-qual-points', '-m', help='The minimum number of qual. points that a turker needs in order to work on these HITs. (default is 10)', type=int, default=10)
-    publish_specific_parser.add_argument('--skip-qualification-done', '-s', help='Indicates that turkers don\'t need to have done the qualification to work on these HITs.', action='store_true')
+    publish_specific_parser.add_argument('--minimum-qual-points', '-m', help='The minimum number of qual. points that a turker needs in order to work on these HITs. (default is 0)', type=int, default=0)
+    publish_random_parser.add_argument('--require-qualification-done', '-q', help='Indicates that turkers need to have done at least one qualification to work on these HITs.', action='store_true')
 
     legacy_parser.add_argument('--create-hit-type', '-t', type=bool, nargs=1, default=False, help='Create new HIT type and optionally set it as the active one', metavar='active')
     legacy_parser.add_argument('--ingest', '-i', nargs=1, help='Parquet file with pdf info', metavar='file')
@@ -127,11 +127,12 @@ def create_hit_type(active: bool = False):
     repository.save_hit_type(params)
     logging.info(f'Created HIT type with params: {params}')
 
-def create_postqual_requirements(minimum_qual_points: int= 10, did_qual_tasks_required: bool= True):
+def create_postqual_requirements(minimum_qual_points: int= 0, did_qual_tasks_required: bool= False):
+    repository.assert_qual_types_exist()
     qual_requirements = []
 
     if minimum_qual_points > 0:
-        qual_points_id = repository.get_qual_requirement_id(QualificationType.QUAL_POINTS)
+        qual_points_id = repository.get_qual_type_id(QualificationType.QUAL_POINTS)
         qual_requirements.append({
             'QualificationTypeId': qual_points_id,
             'Comparator': 'GreaterThanOrEqualTo',
@@ -143,7 +144,7 @@ def create_postqual_requirements(minimum_qual_points: int= 10, did_qual_tasks_re
         })
 
     if did_qual_tasks_required:
-        did_qual_tasks_id = repository.get_qual_requirement_id(QualificationType.DID_QUAL_TASKS)
+        did_qual_tasks_id = repository.get_qual_type_id(QualificationType.DID_QUAL_TASKS)
         qual_requirements = [{
             'QualificationTypeId': did_qual_tasks_id,
             'Comparator': 'Exists',
@@ -156,8 +157,8 @@ def create_postqual_requirements(minimum_qual_points: int= 10, did_qual_tasks_re
 def publish_random(
     count: int,
     comment: str = None,
-    minimum_qual_points: int= 10,
-    did_qual_tasks_required: bool= True
+    minimum_qual_points: int= 0,
+    did_qual_tasks_required: bool= False
 ):
     unpublished = repository.get_pages_by_status([PageStatus.NOT_ANNOTATED], count, True)
     qual_requirements = create_postqual_requirements(minimum_qual_points, did_qual_tasks_required)
@@ -251,6 +252,7 @@ def crop_compare_answers(answer_1_raw, answer_2_raw, page):
     return evaluation.check_no_disagreements(answer_1_parsed, answer_2_parsed, 0.95)
 
 def eval_retrieved():
+    repository.assert_qual_types_exist()
     retrieved = repository.get_pages_by_status([PageStatus.RETRIEVED])
     passed = []
     deferred = []
@@ -310,12 +312,15 @@ def eval_retrieved():
     if worker_id_action_dict:
         repository.update_workers_from_dict(worker_id_action_dict)
         updated_workers_curr_state = repository.get_workers_in_id_list(list(worker_id_action_dict.keys()))
-        did_qual_tasks_id = repository.get_qual_requirement_id(QualificationType.DID_QUAL_TASKS)
-        qual_points_id = repository.get_qual_requirement_id(QualificationType.QUAL_POINTS)
-        for worker in updated_workers_curr_state:
-            # TODO: Finish
-            #mturk_client.assign_qualification_to_worker(did_qual_tasks_id, worker['_id'])
-            pass
+        did_qual_tasks_id = repository.get_qual_type_id(QualificationType.DID_QUAL_TASKS)
+        qual_points_id = repository.get_qual_type_id(QualificationType.QUAL_POINTS)
+        # This is just to satisfy the type system.
+        # The assertion that these are not None is done at the beginning of the func.
+        if did_qual_tasks_id is not None and qual_points_id is not None:
+            for worker in updated_workers_curr_state:
+                mturk_client.assign_qualification_to_worker(did_qual_tasks_id, worker['_id'])
+                total_qual_points = len(worker['qual_pages_completed']) + worker['verification_points'] if 'verification_points' in worker.keys() else 0
+                mturk_client.assign_qualification_to_worker(qual_points_id, worker['_id'], total_qual_points)
 
 def start_server():
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'web.settings')
@@ -354,7 +359,7 @@ def create_qual_requirements():
     created_nr = 0
     for qual in QualificationType:
         logging.debug(f'Creating qual: {qual}')
-        if not repository.get_qual_requirement_id(qual):
+        if not repository.get_qual_type_id(qual):
             keys = mturk_client.create_qual_type(qual)
             repository.save_qual_requirement(keys)
             created_nr += 1
@@ -390,7 +395,7 @@ def pub_qual_pages(max_assignments: int = 10):
         else:
             raise Exception(f'Cannot publish qualification pages because page {page["_id"]} is in the {page["status"]} status')
 
-    did_qual_tasks_id = repository.get_qual_requirement_id(QualificationType.DID_QUAL_TASKS)
+    did_qual_tasks_id = repository.get_qual_type_id(QualificationType.DID_QUAL_TASKS)
     qual_requirements = [{
         'QualificationTypeId': did_qual_tasks_id,
         'Comparator': 'DoesNotExist',
@@ -431,13 +436,13 @@ if __name__ == '__main__':
                 args.publish_random[0],
                 comment,
                 args.minimum_qual_points,
-                not bool(args.ignore_qualification_done)    
+                bool(args.require_qualification_done)
             )
     elif args.command == 'publish-specific':
         comment = None
         if(args.comment):
             comment = args.comment
-        qual_reqs = create_postqual_requirements(args.minimum_qual_points, not bool(args.ignore_qualification_done))
+        qual_reqs = create_postqual_requirements(args.minimum_qual_points, bool(args.require_qualification_done))
         publish(args.publish_specific, comment, qual_requirements=qual_reqs)
 
     logging.info(f'command: {args.command}')
