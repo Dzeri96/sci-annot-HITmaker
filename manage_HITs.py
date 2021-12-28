@@ -16,12 +16,6 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', '-v', help='Enable verbose logging (info, debug)', action='count')
     parser.add_argument('--accept-prompts', '-y', help='Say yes to any prompts (UNSAFE)', action='store_true')
 
-    legacy_parser = subparsers.add_parser(
-        'legacy',
-        description= 'Temporary command for most arguments',
-        argument_default=argparse.SUPPRESS
-    )
-
     publish_random_parser = subparsers.add_parser(
         'publish-random',
         description='Publish a certain number of HITs from the pool of unpublished pages',
@@ -40,16 +34,7 @@ if __name__ == '__main__':
     publish_specific_parser.add_argument('ids', metavar='IDs', nargs='+', help='Space-separated list of Page IDs to publish')
     publish_specific_parser.add_argument('--comment', '-c', help='Pass comment to created HIT that will be saved in the answer', metavar='COMMENT', type=str, required=False)
     publish_specific_parser.add_argument('--minimum-qual-points', '-m', help='The minimum number of qual. points that a turker needs in order to work on these HITs. (default is 0)', type=int, default=0)
-    publish_random_parser.add_argument('--require-qualification-done', '-q', help='Indicates that turkers need to have done at least one qualification to work on these HITs.', action='store_true')
-
-    legacy_parser.add_argument('--create-hit-type', '-t', type=bool, nargs=1, default=False, help='Create new HIT type and optionally set it as the active one', metavar='active')
-    legacy_parser.add_argument('--ingest', '-i', nargs=1, help='Parquet file with pdf info', metavar='file')
-    legacy_parser.add_argument('--publish-specific', '-P', nargs='+', help='Publish a list of pages denoted by space-separated IDs', metavar='IDs', type=str)
-    legacy_parser.add_argument('--fetch-results', '-f', help='Fetch results of published HITs', action='store_true')
-    legacy_parser.add_argument('--evaluate-retrieved', '-E', help='Check inter-annotator agreement of retrieved annotations', action='store_true')
-    legacy_parser.add_argument('--start-server', '-s', help='Start annotation inspection webserver', action='store_true')
-    legacy_parser.add_argument('--save-answers', '-S', help='Save answers to individual json files and additionally save a summary.', metavar='OUTPUT_DIR', nargs=1)
-    legacy_parser.add_argument('--create-qual-reqs', '-q', help='Create qualification requirements', action='store_true')
+    publish_specific_parser.add_argument('--require-qualification-done', '-q', help='Indicates that turkers need to have done at least one qualification to work on these HITs.', action='store_true')
 
     mark_for_qualification_parser = subparsers.add_parser(
         'mark-pages-for-qualification',
@@ -64,6 +49,46 @@ if __name__ == '__main__':
         argument_default=argparse.SUPPRESS
     )
     publish_qualification_pages_parser.add_argument('--max-assignments', '-a', help='Max. number of turkers that can do one HIT (default is 10)', type=int, default=10)
+
+    create_qual_types_parser = subparsers.add_parser(
+        'create-qual-types',
+        description='Create qualification types in the current environment'
+    )
+
+    start_server_parser = subparsers.add_parser(
+        'start-server',
+        description='Start annotation inspection webserver'
+    )
+
+    fetch_results_parser = subparsers.add_parser(
+        'fetch-results',
+        description='Fetch results of published HITs'
+    )
+
+    eval_retrieved_parser = subparsers.add_parser(
+        'eval-retrieved',
+        description='Check inter-annotator agreement of retrieved annotations'
+    )
+
+    ingest_parser = subparsers.add_parser(
+        'ingest',
+        description='Ingest information regarding rasterized pages into the database',
+        argument_default=argparse.SUPPRESS
+    )
+    ingest_parser.add_argument('parquet_file', metavar='PATH', help='Parquet file with pdf info')
+
+    create_hit_type_parser = subparsers.add_parser(
+        'create-hit-type',
+        description='Create new HIT type from data in the .env file for the current environment.'
+    )
+    create_hit_type_parser.add_argument('--active', '-a', help='Make this HIT type the active one', action='store_true')
+
+    export_answers_parser = subparsers.add_parser(
+        'export-answers',
+        description='Save answers to individual json files and additionally save a summary.',
+        argument_default=argparse.SUPPRESS
+    )
+    export_answers_parser.add_argument('output_dir', metavar='PATH', help='Output directory')
 
     args = parser.parse_args()
     
@@ -327,7 +352,7 @@ def start_server():
     application = get_wsgi_application()
     management.call_command('runserver')
 
-def save_answers(output_dir: str):
+def export_answers(output_dir: str):
     existing_ids = [file.split('.')[0] for file in os.listdir(output_dir)]
     accepted_assignments = repository.get_accepted_assignments(existing_ids)
     summary_dict = {}
@@ -355,7 +380,7 @@ def save_answers(output_dir: str):
         summary_df = pd.DataFrame.from_dict(summary_dict, orient='index', columns=['status', 'worker_id'])
     summary_df.to_parquet(export_summary_path)
 
-def create_qual_requirements():
+def create_qual_types():
     created_nr = 0
     for qual in QualificationType:
         logging.debug(f'Creating qual: {qual}')
@@ -407,24 +432,8 @@ def pub_qual_pages(max_assignments: int = 10):
     
 
 if __name__ == '__main__':
-    # Handle arguments
-    if args.command == 'legacy':
-        if(args.ingest):
-            ingest(args.ingest[0])            
-        elif(args.create_hit_type):
-            create_hit_type(args.create_hit_type[0])
-        elif(args.fetch_results):
-            fetch_hit_results()
-        elif(args.evaluate_retrieved):
-            eval_retrieved()
-        elif(args.start_server):
-            start_server()
-            print()
-        elif(args.save_answers):
-            save_answers(args.save_answers[0])
-        elif(args.create_qual_reqs):
-            create_qual_requirements()
-    elif args.command == 'mark-pages-for-qualification':
+    # Handle arguments            
+    if args.command == 'mark-pages-for-qualification':
         mark_pages_for_qual(args.ids)
     elif args.command == 'publish-qualification-pages':
         pub_qual_pages(args.max_assignments)
@@ -442,8 +451,19 @@ if __name__ == '__main__':
         comment = None
         if(args.comment):
             comment = args.comment
-        qual_reqs = create_postqual_requirements(args.minimum_qual_points, bool(args.require_qualification_done))
+        qual_reqs = create_postqual_requirements(args.minimum_qual_points, args.require_qualification_done)
         publish(args.publish_specific, comment, qual_requirements=qual_reqs)
-
-    logging.info(f'command: {args.command}')
-    logging.info(f'args: {args}')
+    elif args.command == 'create-qual-types':
+        create_qual_types()
+    elif args.command == 'start-server':
+        start_server()
+    elif args.command == 'fetch-results':
+        fetch_hit_results()
+    elif args.command == 'eval-retrieved':
+        eval_retrieved()
+    elif args.command == 'ingest':
+        ingest(args.parquet_file)
+    elif args.command == 'create-hit-type':
+        create_hit_type(args.active)
+    elif args.command == 'export-answers':
+        export_answers(args.output_dir)
