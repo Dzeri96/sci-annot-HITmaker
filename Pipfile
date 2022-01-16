@@ -10,12 +10,12 @@ pymongo = {extras = ["srv"], version = "*"}
 coloredlogs = "*"
 pandas = "*"
 pyarrow = "*"
-pdf2image = "*"
 defusedxml = "*"
 sci-annot-eval = {editable = true, path = "./../../validation"}
 django = "*"
 django-cors-headers = "*"
 faker = "*"
+opencv-python = "*"
 
 [dev-packages]
 

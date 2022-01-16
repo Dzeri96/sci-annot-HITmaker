@@ -23,6 +23,7 @@ from sci_annot_eval.parsers import sci_annot_parser
 from sci_annot_eval.exporters import sci_annot_exporter
 from sci_annot_eval.helpers import helpers
 from typing import Any, cast
+from sci_annot_eval.common.bounding_box import AbsoluteBoundingBox
 answer_parser = sci_annot_parser.SciAnnotParser()
 answer_exporter = sci_annot_exporter.SciAnnotExporter()
 
@@ -60,7 +61,7 @@ class Assignment(View):
                 orig_answer = assignment['answer']
                 orig_bboxes = answer_parser.parse_dict(orig_answer, False)
                 # TODO: Remove the need for casting
-                cropped_bboxes = helpers.crop_all_to_content(img_path, cast(list[RelativeBoundingBox],orig_bboxes))
+                cropped_bboxes = helpers.crop_all_to_content(img_path, cast(list[AbsoluteBoundingBox],orig_bboxes))
                 exported_annots = answer_exporter.export_to_dict(cropped_bboxes, int(orig_answer['canvasWidth']), int(orig_answer['canvasHeight']))
                 orig_answer['annotations'] = exported_annots['annotations']
             logging.debug(f'Returning assignment: {assignment}')
