@@ -9,6 +9,12 @@ Amazon Mechanical Turk Client written in python for managing HITs of the task of
 
 To install the dependencies, run 'pipenv install'
 
+## First time setup
+Every time you want to start work in a new environment (there are basically only two), you have to follow these steps:
+
+1. Create the main HIT type: `python3 manage_HITs.py --env ENVFILE create-hit-type -a`
+2. Ingest PDFs from parquet file: `python3 manage_HITs.py -vv -e ENVFILE ingest DOWNLOADED_PDFS_PARQ`
+
 ## Usage
 To show the usage of this library, run
 ```

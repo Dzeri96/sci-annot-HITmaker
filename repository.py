@@ -24,27 +24,34 @@ class DB:
             )[Config.get('mongodb_db_name')]
             return DB.__instance
 
-def ingest_pdf(row: pandas.Series):
-    id = row.id
-    fields = row.to_dict()
-    fields.pop('id')
+def ingest_pdfs(data: pandas.DataFrame):
+    pdf_list = []
+    page_list = []
 
-    logging.debug(f'Ingesting row:\n{str(row)}')
+    for index, row in data.iterrows():
+        logging.debug(f'Ingesting row:\n{str(index)}')
+        id = row.id
+        fields = row.to_dict()
+        fields.pop('id')
 
-    DB.get().pdfs.insert({
-        '_id': id,
-        **fields
-    })
+        pdf_list.append({
+            '_id': id,
+            **fields
+        })
+        
+        # This is to handle the dumb way pdftoppm names files: 
+        # https://gitlab.freedesktop.org/poppler/poppler/-/issues/1172
+        nr_digits = len(str(fields['page_count']))
+        pages = [{
+            '_id': '%s-%0*d' % (id, nr_digits, page_nr),
+            'status': PageStatus.NOT_ANNOTATED.value
+        } for page_nr in range(1, fields['page_count']+1)]
+        page_list.extend(pages)
 
-    # This is to handle the dumb way pdftoppm names files: 
-    # https://gitlab.freedesktop.org/poppler/poppler/-/issues/1172
-    nr_digits = len(str(fields['page_count']))
-    pages = [{
-        '_id': '%s-%0*d' % (id, nr_digits, page_nr),
-        'status': PageStatus.NOT_ANNOTATED.value
-    } for page_nr in range(1, fields['page_count']+1)]
-
-    DB.get().pages.insert_many(pages, ordered=False)
+    logging.debug(f'Inserting {len(pdf_list)} pdfs into the DB...')
+    DB.get().pdfs.insert_many(pdf_list, ordered=False)
+    logging.debug(f'Inserting {len(page_list)} pages into the DB...')
+    DB.get().pages.insert_many(page_list, ordered=False)
 
 def save_hit_type(params: dict):
     if(params['active']):

@@ -130,8 +130,7 @@ def ingest(path):
     data = pd.read_parquet(path)
     logging.info(f'Ingesting {path} into database...')
 
-    for index, row in data.iterrows():
-        repository.ingest_pdf(row)
+    repository.ingest_pdfs(data)
     
     logging.info(f'Finished ingesting {data.shape[0]} rows')
     
