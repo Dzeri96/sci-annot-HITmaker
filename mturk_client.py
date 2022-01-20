@@ -51,11 +51,49 @@ def create_hit_type (
         raise Exception('Could not create HIT type: ' + str(response))
 
 def create_hit(
-    type_id: str,
+    hit_type: dict,
     image_url: str,
     comment: str = None,
     max_assignments: int = int(Config.get('max_assignments')),
     qualification_requirements: list = []
+):
+    external_url = Config.get('external_url')
+    fullUrl = f'{external_url}?image={image_url}'
+    if comment:
+        fullUrl += f'&amp;comment={parse.quote_plus(comment)}'
+    question_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
+    <ExternalQuestion xmlns="http://mechanicalturk.amazonaws.com/AWSMechanicalTurkDataSchemas/2006-07-14/ExternalQuestion.xsd">
+        <ExternalURL>{fullUrl}</ExternalURL>
+        <FrameHeight>0</FrameHeight>
+    </ExternalQuestion>
+    '''
+
+    arguments = {
+        'Title': hit_type['title'],
+        'Keywords': hit_type['keywords'],
+        'Description': hit_type['description'],
+        'Reward': hit_type['reward'],
+        'AssignmentDurationInSeconds': hit_type['duration_sec'],
+        'AutoApprovalDelayInSeconds': hit_type['auto_approval_delay_sec'],
+        'MaxAssignments': max_assignments,
+        'LifetimeInSeconds': int(Config.get('lifetime_sec')),
+        'Question': question_xml
+    }
+
+    if qualification_requirements:
+        arguments['QualificationRequirements'] = qualification_requirements
+
+    response = Client.get().create_hit(
+        **arguments
+    )
+
+    return response
+
+def create_hit_with_hit_type(
+    type_id: str,
+    image_url: str,
+    comment: str = None,
+    max_assignments: int = int(Config.get('max_assignments')),
 ):
     external_url = Config.get('external_url')
     fullUrl = f'{external_url}?image={image_url}'
@@ -74,9 +112,6 @@ def create_hit(
         'LifetimeInSeconds': int(Config.get('lifetime_sec')),
         'Question': question_xml
     }
-
-    if qualification_requirements:
-        arguments['QualificationRequirements'] = qualification_requirements
 
     response = Client.get().create_hit_with_hit_type(
         **arguments

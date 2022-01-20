@@ -14,7 +14,7 @@ class DB:
 
     @staticmethod
     def get():
-        if hasattr(DB, '__instance'):
+        if hasattr(DB, '_DB__instance'):
             return DB.__instance
         else:
             logging.debug(f'Creating a new DB client with URI: {Config.get("mongodb_uri")} and DB: {Config.get("mongodb_db_name")}')
@@ -29,7 +29,7 @@ def ingest_pdfs(data: pandas.DataFrame):
     page_list = []
 
     for index, row in data.iterrows():
-        logging.debug(f'Ingesting row:\n{str(index)}')
+        logging.debug(f'Ingesting row: {str(index)}')
         id = row.id
         fields = row.to_dict()
         fields.pop('id')
@@ -106,9 +106,13 @@ def update_pages_from_tuples(filter_actions_list: list[tuple]):
         filters,
         actions
     ) for filters, actions in filter_actions_list]
-    bulk_results = DB.get().pages.bulk_write(update_operations)
-    logging.debug(f'Updated: {bulk_results.modified_count} document(s)')
-    return bulk_results
+    if len(update_operations):
+        bulk_results = DB.get().pages.bulk_write(update_operations)
+        logging.debug(f'Updated: {bulk_results.modified_count} document(s)')
+        return bulk_results
+    else:
+        logging.debug('No update operations provided')
+        return None
 
 def get_pages_by_status(statuses: list[PageStatus], count: int = None, id_only: bool = False) -> list:
     aggregation_pipeline: list[dict[str, Any]] = [{

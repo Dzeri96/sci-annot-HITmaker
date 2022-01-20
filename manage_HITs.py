@@ -25,7 +25,7 @@ if __name__ == '__main__':
     publish_random_parser.add_argument('count', help='Number of pages', metavar='COUNT', type=int)
     publish_random_parser.add_argument('--comment', '-c', help='Pass comment to created HIT that will be saved in the answer', metavar='COMMENT', type=str, required=False)
     publish_random_parser.add_argument('--minimum-qual-points', '-m', help='The minimum number of qual. points that a turker needs in order to work on these HITs. (default is 0)', type=int, default=0)
-    publish_random_parser.add_argument('--require-qualification-done', '-q', help='Indicates that turkers need to have done at least one qualification to work on these HITs.', action='store_true')
+    publish_random_parser.add_argument('--require-qualification-done', '-q', help='Indicates that turkers need to have done at least one qualification to work on these HITs.', action='store_true', default=False)
 
     publish_specific_parser = subparsers.add_parser(
         'publish-specific',
@@ -35,7 +35,7 @@ if __name__ == '__main__':
     publish_specific_parser.add_argument('ids', metavar='IDs', nargs='+', help='Space-separated list of Page IDs to publish')
     publish_specific_parser.add_argument('--comment', '-c', help='Pass comment to created HIT that will be saved in the answer', metavar='COMMENT', type=str, required=False)
     publish_specific_parser.add_argument('--minimum-qual-points', '-m', help='The minimum number of qual. points that a turker needs in order to work on these HITs. (default is 0)', type=int, default=0)
-    publish_specific_parser.add_argument('--require-qualification-done', '-q', help='Indicates that turkers need to have done at least one qualification to work on these HITs.', action='store_true')
+    publish_specific_parser.add_argument('--require-qualification-done', '-q', help='Indicates that turkers need to have done at least one qualification to work on these HITs.', action='store_true', default=False)
 
     mark_for_qualification_parser = subparsers.add_parser(
         'mark-pages-for-qualification',
@@ -209,13 +209,21 @@ def publish(
     for page in ids:
         img_url = Config.get('image_url_base') + page + Config.get('image_extension')
         try:
-            response = mturk_client.create_hit(
-                active_hit_type['_id'],
-                img_url,
-                comment,
-                max_assignments,
-                qual_requirements
-            )
+            if len(qual_requirements):
+                response = mturk_client.create_hit(
+                    active_hit_type,
+                    img_url,
+                    comment,
+                    max_assignments,
+                    qual_requirements
+                )
+            else:
+                response = mturk_client.create_hit_with_hit_type(
+                    active_hit_type['_id'],
+                    img_url,
+                    comment,
+                    max_assignments,
+                )
             if(response['ResponseMetadata']['HTTPStatusCode'] == 200):
                 logging.debug(f'Created hit: {response}')
                 page_id_HIT_response_map[page] = response
@@ -438,18 +446,19 @@ if __name__ == '__main__':
     elif args.command == 'publish-qualification-pages':
         pub_qual_pages(args.max_assignments)
     elif args.command == 'publish-random':
-            comment = None
-            if(args.comment):
-                comment = args.comment
-            publish_random(
-                args.publish_random[0],
-                comment,
-                args.minimum_qual_points,
-                bool(args.require_qualification_done)
-            )
+        print(f'Args: {args}')
+        comment = None
+        if('comment' in args):
+            comment = args.comment
+        publish_random(
+            args.count,
+            comment,
+            args.minimum_qual_points,
+            bool(args.require_qualification_done)
+        )
     elif args.command == 'publish-specific':
         comment = None
-        if(args.comment):
+        if('comment' in args):
             comment = args.comment
         qual_reqs = create_postqual_requirements(args.minimum_qual_points, args.require_qualification_done)
         publish(args.publish_specific, comment, qual_requirements=qual_reqs)

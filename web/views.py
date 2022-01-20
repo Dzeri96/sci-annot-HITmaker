@@ -98,14 +98,14 @@ class Assignment(View):
             # Annotation accepted as-is and a verification point is given
             else:
                 repository.assert_qual_types_exist()
-                worker_id = repository.get_assignment(page_id, assignment_id)
+                worker_id = repository.get_assignment(page_id, assignment_id)['worker_id']
                 logging.debug(f'Awarding one verification point to worker {worker_id}')
-                worker_action_dict = {worker_id: {'verification_points': {'$add': 1}}}
+                worker_action_dict = {worker_id: {'$inc': {'verification_points': 1}}}
                 repository.update_workers_from_dict(worker_action_dict)
                 worker = repository.get_workers_in_id_list([worker_id]).next()
                 total_qual_points = worker['verification_points'] + \
-                    len(worker['qual_pages_completed']) if 'qual_pages_completed' in worker.keys()\
-                    else 0
+                    (len(worker['qual_pages_completed']) if 'qual_pages_completed' in worker.keys()\
+                    else 0)
                 qual_points_id = repository.get_qual_type_id(QualificationType.QUAL_POINTS)
                 # This is just to satisfy the type system.
                 # The assertion that these are not None is done at the beginning of the block.
@@ -128,13 +128,13 @@ class Assignment(View):
                 worker_action_dict = {}
                 for worker_id in workers_to_punish:
                     worker_action_dict[worker_id] = \
-                        {'verification_points': {'$add': -int(Config.get('rejected_assignment_penalty'))}}
+                        {'$inc': {'verification_points': -int(Config.get('rejected_assignment_penalty'))}}
                 repository.update_workers_from_dict(worker_action_dict)
                 curr_worker_states = repository.get_workers_in_id_list(list(worker_action_dict.keys()))
                 for worker in curr_worker_states:
                     total_qual_points = worker['verification_points'] + \
-                        len(worker['qual_pages_completed']) if 'qual_pages_completed' in worker.keys()\
-                        else 0
+                        (len(worker['qual_pages_completed']) if 'qual_pages_completed' in worker.keys()\
+                        else 0)
                     mturk_client.assign_qualification_to_worker(qual_points_id, worker['_id'], total_qual_points)
 
 
