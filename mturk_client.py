@@ -162,3 +162,24 @@ def assign_qualification_to_worker(
     logging.debug(f'Calliing associate_qualification with following args: {args}')    
     response = Client.get().associate_qualification_with_worker(**args)
     return response
+
+def approve_assignment(
+    assignment_id: str,
+    requester_feedback: str= Config.get('approve_assignment_feedback'),
+):
+    logging.debug(f'Approving assignment {assignment_id} with feedback: "{requester_feedback}"')
+    Client.get().approve_assignment(
+        AssignmentId=assignment_id,
+        RequesterFeedback=requester_feedback,
+        OverrideRejection=True
+    )
+
+def reject_assignment(
+    assignment_id: str,
+    requester_feedback: str= Config.get('reject_assignment_feedback'),
+):
+    logging.debug(f'Rejecting assignment {assignment_id} with feedback: "{requester_feedback}"')
+    Client.get().reject_assignment(
+        AssignmentId=assignment_id,
+        RequesterFeedback=requester_feedback
+    )

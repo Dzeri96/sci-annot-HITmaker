@@ -98,7 +98,8 @@ class Assignment(View):
             # Annotation accepted as-is and a verification point is given
             else:
                 repository.assert_qual_types_exist()
-                worker_id = repository.get_assignment(page_id, assignment_id)['worker_id']
+                assignment = repository.get_assignment(page_id, assignment_id)
+                worker_id = assignment['worker_id']
                 logging.debug(f'Awarding one verification point to worker {worker_id}')
                 worker_action_dict = {worker_id: {'$inc': {'verification_points': 1}}}
                 repository.update_workers_from_dict(worker_action_dict)
@@ -110,7 +111,9 @@ class Assignment(View):
                 # This is just to satisfy the type system.
                 # The assertion that these are not None is done at the beginning of the block.
                 if qual_points_id is not None:
-                    mturk_client.assign_qualification_to_worker(qual_points_id, worker_id, total_qual_points)    
+                    mturk_client.assign_qualification_to_worker(qual_points_id, worker_id, total_qual_points) 
+                if datetime.now() < assignment['auto_approval_time']:
+                    mturk_client.approve_assignment(assignment_id)
                 
             set_data['accepted_assignment_id'] = assignment_id
             update_resp = repository.update_pages_from_dict({
@@ -136,6 +139,9 @@ class Assignment(View):
                         (len(worker['qual_pages_completed']) if 'qual_pages_completed' in worker.keys()\
                         else 0)
                     mturk_client.assign_qualification_to_worker(qual_points_id, worker['_id'], total_qual_points)
+                for assignment in rejected_assignments:
+                    if datetime.now() < assignment['auto_approval_time']:
+                        mturk_client.reject_assignment(assignment['assignment_id'])
 
 
             update_resp = repository.update_pages_from_dict({
