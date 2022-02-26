@@ -9,25 +9,51 @@
         <link rel="stylesheet" type="text/css" href="{% static 'web/style.css' %}?{% cache_bust %}">
     </head>
   <body>
-    <h1>HITMaker Dashboard</h1>
+    <div id="header-container">
+        <h1>HITMaker Dashboard</h1>
+        <div style="justify-self: flex-end; "><b>Environment</b>: {{environment}}</div>
+    </div>
     <div id="status-container">
         <h2>Pages:</h2>
-        <table class="fixed">
+        <table>
             <tr><th align="left">Status</th><th>Count</th><th></th></tr>
             {% for entry in status_counts %}
                 <tr>
                     <th align="left"><a href="/review?page_status={{entry.status}}">{{entry.status}}</a></th>
                     <th>{{entry.count}}</th>
                     <th>
-                        <div style="background-color: {{entry.color}}; width: {% widthratio entry.count total_count 100 %}%;">
-                            {% widthratio entry.count total_count 100 %}%
+                        <div class="chart-bar" style="background-color: {{entry.color}}; width: {% widthratio entry.count total_page_count 100 %}%;">
+                            {% widthratio entry.count total_page_count 100 %}%
                         </div>
                     </th>
                 </tr>
             {% endfor %}
             <tr>
                 <th align="left"><b>Total</b></th>
-                <th>{{total_count}}</th>
+                <th>{{total_page_count}}</th>
+                <th>
+                </th>
+            </tr>
+        </table>
+    </div>
+    <div id="status-container">
+        <h2>Worker Qualification Points:</h2>
+        <table>
+            <tr><th align="left">Range</th><th>Count</th><th></th></tr>
+            {% for entry in worker_points_buckets %}
+                <tr>
+                    <th align="left"><nobr>[{{entry.begin | floatformat:2}}, {{entry.end | floatformat:2}})</nobr></th>
+                    <th>{{entry.count}}</th>
+                    <th>
+                        <div class="chart-bar" style="background-color: #7b84fc; width: {% widthratio entry.count nr_workers 100 %}%;">
+                            {% widthratio entry.count nr_workers 100 %}%
+                        </div>
+                    </th>
+                </tr>
+            {% endfor %}
+            <tr>
+                <th align="left"><b>Total</b></th>
+                <th>{{nr_workers}}</th>
                 <th>
                 </th>
             </tr>

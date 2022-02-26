@@ -1,4 +1,5 @@
-from typing import Any
+from collections import namedtuple
+from typing import Any, NamedTuple
 from pymongo.database import Database
 from config import Config
 from pymongo import MongoClient, DESCENDING, ASCENDING, UpdateOne
@@ -8,6 +9,7 @@ from enums.page_status import PageStatus
 from enums.qualification_types import QualificationType
 import os
 import urllib.request
+import numpy as np
 
 QUAL_TYPE_CACHE = {}
 
@@ -330,3 +332,48 @@ def get_image_as_bytes(page_id) -> bytes:
     else:
         data = open(img_path, 'rb').read()
     return data
+
+class WorkerPointsBucket(NamedTuple):
+    begin: float
+    end: float
+    count: int
+
+def get_worker_verification_points_distribution(nr_buckets= 10) -> list[WorkerPointsBucket]:
+    min_max_res = DB.get().workers.aggregate([
+        {
+            '$group': {
+                'max': {
+                    '$max': '$verification_points'
+                }, 
+                'min': {
+                    '$min': '$verification_points'
+                }, 
+                '_id': None
+            }
+        }
+    ]).next()
+    max_points = min_max_res['max']
+    min_points = min_max_res['min']
+    bucket_boundaries = np.linspace(min_points, max_points+1, nr_buckets).tolist()
+
+    bucket_response =  DB.get().workers.aggregate([
+        {
+            '$bucket': {
+                'groupBy': '$verification_points', 
+                'boundaries': bucket_boundaries, 
+                'output': {
+                    'count': {
+                        '$sum': 1
+                    }
+                }
+            }
+        }
+    ])
+    bucket_begin_size_map = {res['_id']:res['count'] for res in bucket_response}
+    buckets: list[WorkerPointsBucket] = []
+    for i in range(len(bucket_boundaries) - 1):
+        begin = bucket_boundaries[i]
+        end = bucket_boundaries[i+1]
+        count = bucket_begin_size_map[begin] if (begin in bucket_begin_size_map) else 0
+        buckets.append(WorkerPointsBucket(begin, end, count))
+    return buckets

@@ -36,15 +36,20 @@ def id_generator(size=6, chars=string.ascii_uppercase + string.digits):
 
 def index(request):
     status_counts = repository.get_status_counts()
-    total_count = 0
+    worker_points_buckets = repository.get_worker_verification_points_distribution()
+    nr_workers = sum([bucket.count for bucket in worker_points_buckets])
+    total_page_count = 0
     for status_count in status_counts:
-        total_count += status_count['count']
+        total_page_count += status_count['count']
         status_count['color'] = fake.color(luminosity='light', hue=(0, 360))
     fake.seed_instance(10)
 
     context = {
         'status_counts': status_counts,
-        'total_count': total_count
+        'total_page_count': total_page_count,
+        'worker_points_buckets': worker_points_buckets,
+        'nr_workers': nr_workers,
+        'environment': Config.get('env_name')
     }
     logging.debug(f'context: {context}')
     return render(request, 'web/index.html', context)
