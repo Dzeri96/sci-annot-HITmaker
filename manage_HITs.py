@@ -261,6 +261,7 @@ def fetch_hit_results():
                         'auto_approval_time': assignment['AutoApprovalTime'],
                         'submit_time': assignment['SubmitTime'],
                         'reviewed': False,
+                        'environment': Config.get('env_name'),
                         'answer': xml_to_dict(assignment['Answer'], sci_annot_parsers_dict),
                     })
 
@@ -277,11 +278,11 @@ def fetch_hit_results():
     repository.update_pages_from_dict(operation_dict)
 
 def crop_compare_answers(answer_1_raw, answer_2_raw, page):
-    img_path = Config.get('image_folder') + page['_id'] + Config.get('image_extension')
+    img_bytes = repository.get_image_as_bytes(page['id'])
     answer_1_parsed = cast(list[AbsoluteBoundingBox], answer_parser.parse_dict(answer_1_raw, False))
-    answer_1_parsed = helpers.make_relative(helpers.crop_all_to_content(img_path, answer_1_parsed), answer_1_raw['canvasWidth'], answer_1_raw['canvasHeight'])
+    answer_1_parsed = helpers.make_relative(helpers.crop_all_to_content(img_bytes, answer_1_parsed), answer_1_raw['canvasWidth'], answer_1_raw['canvasHeight'])
     answer_2_parsed = cast(list[AbsoluteBoundingBox], answer_parser.parse_dict(answer_2_raw, False))
-    answer_2_parsed = helpers.make_relative(helpers.crop_all_to_content(img_path, answer_2_parsed), answer_2_raw['canvasWidth'], answer_2_raw['canvasHeight'])
+    answer_2_parsed = helpers.make_relative(helpers.crop_all_to_content(img_bytes, answer_2_parsed), answer_2_raw['canvasWidth'], answer_2_raw['canvasHeight'])
     return evaluation.check_no_disagreements(answer_1_parsed, answer_2_parsed, 0.95)
 
 def eval_retrieved():

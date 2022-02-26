@@ -6,6 +6,8 @@ import pandas
 import logging
 from enums.page_status import PageStatus
 from enums.qualification_types import QualificationType
+import os
+import urllib.request
 
 QUAL_TYPE_CACHE = {}
 
@@ -307,3 +309,24 @@ def update_workers_from_dict(worker_id_ops_dict: dict):
         bulk_results = DB.get().workers.bulk_write(update_operations)
         logging.debug(f'Updated: {bulk_results.modified_count} document(s)')
         return bulk_results
+
+def get_image_as_bytes(page_id) -> bytes:
+    """Takes a page id and returns the bytes of the rasterized image.
+    If the file is not available locally, it fetches it from image_url_base,
+    and saves the response before returning the data.
+
+    Args:
+        page_id (_type_): ID of the rasterized page
+
+    Returns:
+        bytes: Image as bytes
+    """
+
+    img_path = Config.get('image_folder') + page_id + Config.get('image_extension')
+    if not os.path.isfile(img_path):
+        data: bytes = urllib.request.urlopen(Config.get('image_url_base') + page_id + Config.get('image_extension')).read()
+        open(img_path, 'wb').write(data)
+        logging.warning(f'Image not found on path {img_path}. Instead, it was downloaded from image_url_base. Consider downloading the rasterized pages locally for better performance.')
+    else:
+        data = open(img_path, 'rb').read()
+    return data

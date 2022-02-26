@@ -27,6 +27,12 @@ A typical workflow would look like this:
 2. Fetch the results after some time: `python3 manage_HITs.py -v -e ENVFILE fetch-results`
 3. Automatically evaluate fetched results if possible: `python3 manage_HITs.py -v -e ENVFILE eval-retrieved`
 
+### URL parameters
+These parameters change the behavior of the front-end:
+
+    - 'crop_whitespace' - Boolean param, shows a cropped version of the bounding boxes, but doesn't actually change them on the back-end.
+    - 'page_status' - When an action on a page is performed, selects the status of the next page to be loaded. For example `page_status=DEFERRED`.
+
 ## TODO
 - Write about the security implications of using XML parsers, and how MTurk requesters' servers could be prime targets.
 They have money after all

@@ -57,11 +57,11 @@ class Assignment(View):
             crop_whitespace = request.GET.__contains__('crop_whitespace')
             assignment = repository.get_assignment(page_id, assignment_id)
             if(crop_whitespace):
-                img_path = Config.get('image_folder') + page_id + Config.get('image_extension')
                 orig_answer = assignment['answer']
                 orig_bboxes = answer_parser.parse_dict(orig_answer, False)
+                img_bytes = repository.get_image_as_bytes(page_id)
                 # TODO: Remove the need for casting
-                cropped_bboxes = helpers.crop_all_to_content(img_path, cast(list[AbsoluteBoundingBox],orig_bboxes))
+                cropped_bboxes = helpers.crop_all_to_content(img_bytes, cast(list[AbsoluteBoundingBox],orig_bboxes))
                 exported_annots = answer_exporter.export_to_dict(cropped_bboxes, int(orig_answer['canvasWidth']), int(orig_answer['canvasHeight']))
                 orig_answer['annotations'] = exported_annots['annotations']
             logging.debug(f'Returning assignment: {assignment}')
