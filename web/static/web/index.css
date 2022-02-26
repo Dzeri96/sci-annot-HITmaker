@@ -26,3 +26,7 @@ th:last-child {width: 100%;}/*Setting the width of column 3.*/
     align-items: flex-end;
     margin: 0 0 0.3em 0;
 }
+
+#logo {
+    height: 3em;
+}

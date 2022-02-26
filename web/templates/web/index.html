@@ -7,9 +7,11 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link rel="stylesheet" type="text/css" href="{% static 'web/index.css' %}?{% cache_bust %}">
         <link rel="stylesheet" type="text/css" href="{% static 'web/style.css' %}?{% cache_bust %}">
+        <link rel="icon" type="image/x-icon" href="{% static 'web/images/favicon.ico'%}">
     </head>
   <body>
     <div id="header-container">
+        <img id="logo" src="{% static 'web/images/logo-small.png'%}" alt="logo">
         <h1>HITMaker Dashboard</h1>
         <div style="justify-self: flex-end; "><b>Environment</b>: {{environment}}</div>
     </div>
