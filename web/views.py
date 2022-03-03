@@ -49,7 +49,8 @@ def index(request):
         'total_page_count': total_page_count,
         'worker_points_buckets': worker_points_buckets,
         'nr_workers': nr_workers,
-        'environment': Config.get('env_name')
+        'environment': Config.get('env_name'),
+        'active_page_groups': Config.get('active_page_groups')
     }
     logging.debug(f'context: {context}')
     return render(request, 'web/index.html', context)
@@ -174,7 +175,7 @@ def review(request):
     
     try:
         # TODO: This can be cached to reduce DB round-trips
-        random_page = repository.get_pages_by_status([PageStatus[page_status.upper()]], 1)[0]
+        random_page = repository.get_random_pages_by_status([PageStatus[page_status.upper()]], 1)[0]
         # Django has terrible support for query params
         reversed_url = reverse('review_page', kwargs={'page_id': random_page['_id']})
         full_redirect_url = reversed_url + '?' + request.GET.urlencode()

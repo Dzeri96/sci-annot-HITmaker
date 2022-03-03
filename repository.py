@@ -29,6 +29,23 @@ class DB:
             return DB.__instance
 
 def ingest_pdfs(data: pandas.DataFrame):
+    """Ingests a render summary dataframe into the collection pages and pdfs
+    
+ 
+    Args:
+        data (pandas.DataFrame): Dataframe with the following shape:
+            #   Column  Dtype \n
+            ---  ------  ----- \n
+            0   file    object\n
+            1   page_nr int64 \n
+            2   width   int64 \n
+            3   height  int64 \n
+            4   format  object\n
+            5   DPI     int64\n
+
+            Where only file and page_nr are required fields.
+            Any extra columns are allowed and simply passed to the database.
+    """     
     pdf_list = []
     page_list = []
 
@@ -48,7 +65,8 @@ def ingest_pdfs(data: pandas.DataFrame):
         nr_digits = len(str(fields['page_count']))
         pages = [{
             '_id': '%s-%0*d' % (id, nr_digits, page_nr),
-            'status': PageStatus.NOT_ANNOTATED.value
+            'status': PageStatus.NOT_ANNOTATED.value,
+            'pdf_id': fields['file']
         } for page_nr in range(1, fields['page_count']+1)]
         page_list.extend(pages)
 
@@ -118,12 +136,16 @@ def update_pages_from_tuples(filter_actions_list: list[tuple]):
         logging.debug('No update operations provided')
         return None
 
-def get_pages_by_status(statuses: list[PageStatus], count: int = None, id_only: bool = False) -> list:
+def get_random_pages_by_status(statuses: list[PageStatus], count: int = None, id_only: bool = False) -> list:
     aggregation_pipeline: list[dict[str, Any]] = [{
         '$match': {
             'status': {'$in': [st.value for st in statuses]}
         }
     }]
+
+    if Config.get('active_page_groups'):
+        logging.debug(f'Matching groups {Config.get("active_page_groups")} in get_random_pages_by_status')
+        aggregation_pipeline[0]['$match']['group'] = {'$in': Config.get('active_page_groups')}
 
     if count:
         aggregation_pipeline.append({
@@ -173,7 +195,7 @@ def get_assignment(page_id: str, assignment_id: str):
         raise LookupError(f'Assignment {assignment_id} in page {page_id} not found!')
 
 def get_status_counts() -> list[dict[str, int]]:
-    result = DB.get().pages.aggregate([
+    pipeline = [
         {
             '$group': {
                 '_id': '$status', 
@@ -192,10 +214,20 @@ def get_status_counts() -> list[dict[str, int]]:
                 'count': 1
             }
         }
-    ])
+    ]
+    if Config.get('active_page_groups'):
+        logging.debug(f'Matching groups {Config.get("active_page_groups")} in get_status_counts')
+        pipeline.insert(0, {
+            '$match': {
+                'group': {'$in': Config.get('active_page_groups')}
+            }
+        })
+
+    result = DB.get().pages.aggregate(pipeline)
 
     return list(result)
 
+# TODO: Maybe add group filter
 def get_accepted_assignments(exclude_ids: list[str]):
     """
         Returns objects in the shape of {id_: page id, status: page status, assignment: selected assignment}
@@ -257,6 +289,10 @@ def get_accepted_assignments(exclude_ids: list[str]):
             }
         }
     ]
+    if Config.get('active_page_groups'):
+        logging.debug(f'Matching groups {Config.get("active_page_groups")} in get_accepted_assignments')
+        pipeline[0]['$match']['group'] = {'$in': Config.get('active_page_groups')}
+
     result = DB.get().pages.aggregate(pipeline)
     return result
 

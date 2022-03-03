@@ -13,7 +13,10 @@
     <div id="header-container">
         <img id="logo" src="{% static 'web/images/logo-small.png'%}" alt="logo">
         <h1>HITMaker Dashboard</h1>
-        <div style="justify-self: flex-end; "><b>Environment</b>: {{environment}}</div>
+        <div style="justify-self: flex-end; ">
+            <div><b>Environment</b>: {{environment}}</div>
+            <div><b>Active page groups</b>: {{active_page_groups}}</div>
+        </div>
     </div>
     <div id="status-container">
         <h2>Pages:</h2>

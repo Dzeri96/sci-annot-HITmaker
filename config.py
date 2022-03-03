@@ -1,5 +1,6 @@
 import os
 from dotenv import dotenv_values
+import json
 
 class Config:
     __conf = {
@@ -20,3 +21,9 @@ class Config:
             **dotenv_values(file_path),
             **os.environ
         }
+
+        # Parse JSON and set None if variable does not exist
+        if 'active_page_groups' in Config.__conf:
+            Config.__conf['active_page_groups'] = json.loads(Config.__conf['active_page_groups'])
+        else:
+            Config.__conf['active_page_groups'] = None

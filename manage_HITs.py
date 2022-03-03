@@ -185,7 +185,7 @@ def publish_random(
     minimum_qual_points: int= 0,
     did_qual_tasks_required: bool= False
 ):
-    unpublished = repository.get_pages_by_status([PageStatus.NOT_ANNOTATED], count, True)
+    unpublished = repository.get_random_pages_by_status([PageStatus.NOT_ANNOTATED], count, True)
     qual_requirements = create_postqual_requirements(minimum_qual_points, did_qual_tasks_required)
     publish([page['_id'] for page in unpublished], comment, qual_requirements= qual_requirements)
 
@@ -237,7 +237,7 @@ def publish(
     repository.update_pages_to_submitted(page_id_HIT_response_map)
 
 def fetch_hit_results():
-    submitted_pages = repository.get_pages_by_status([PageStatus.SUBMITTED])
+    submitted_pages = repository.get_random_pages_by_status([PageStatus.SUBMITTED])
     nr_found_pages = len(submitted_pages)
     logging.info(f'Found {nr_found_pages} submitted pages.')
 
@@ -287,7 +287,7 @@ def crop_compare_answers(answer_1_raw, answer_2_raw, page):
 
 def eval_retrieved():
     repository.assert_qual_types_exist()
-    retrieved = repository.get_pages_by_status([PageStatus.RETRIEVED])
+    retrieved = repository.get_random_pages_by_status([PageStatus.RETRIEVED])
     passed = []
     deferred = []
     rejected = []
