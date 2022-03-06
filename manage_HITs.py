@@ -142,7 +142,8 @@ def create_hit_type(active: bool = False):
         'description': Config.get('HIT_type_description'),
         'reward': Config.get('HIT_type_reward'),
         'duration_sec': int(Config.get('HIT_type_duration_sec')),
-        'auto_approval_delay_sec': int(Config.get('HIT_type_auto_approval_delay_sec'))
+        'auto_approval_delay_sec': int(Config.get('HIT_type_auto_approval_delay_sec')),
+        'environment': Config.get('env_name')
     }
 
     id = mturk_client.create_hit_type(**params)
@@ -243,6 +244,7 @@ def fetch_hit_results():
     logging.info(f'Found {nr_found_pages} submitted pages.')
 
     operation_dict = {}
+    nr_feedback_messages = 0
     for page in submitted_pages:
         latest_hit_id = page['HIT_ids'][-1]
         status = mturk_client.get_HIT_status(latest_hit_id)
@@ -255,6 +257,9 @@ def fetch_hit_results():
             parsed_assignments = []
             if (nr_results > 0):
                 for assignment in result_response['Assignments']:
+                    parsed_answer = xml_to_dict(assignment['Answer'], sci_annot_parsers_dict)
+                    if 'feedback' in parsed_answer:
+                        nr_feedback_messages += 1
                     parsed_assignments.append({
                         'assignment_id': assignment['AssignmentId'],
                         'worker_id': assignment['WorkerId'],
@@ -263,7 +268,7 @@ def fetch_hit_results():
                         'submit_time': assignment['SubmitTime'],
                         'reviewed': False,
                         'environment': Config.get('env_name'),
-                        'answer': xml_to_dict(assignment['Answer'], sci_annot_parsers_dict),
+                        'answer': parsed_answer,
                     })
 
             operation_dict[page['_id']] = {
@@ -277,8 +282,10 @@ def fetch_hit_results():
                 }
 
     status_counter = Counter(op['$set']['status'] for op in operation_dict.values())
-    status_counter[PageStatus.SUBMITTED] = nr_found_pages - len(operation_dict)
+    status_counter[PageStatus.SUBMITTED.value] = nr_found_pages - len(operation_dict)
     logging.info(f'Summary of submitted page statuses: {status_counter}')
+    if nr_feedback_messages:
+        logging.warning(f'{nr_feedback_messages} feedback message(s) received!')
     repository.update_pages_from_dict(operation_dict)
 
 def crop_compare_answers(answer_1_raw, answer_2_raw, page):
@@ -363,7 +370,7 @@ def eval_retrieved():
 def start_server():
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'web.settings')
     application = get_wsgi_application()
-    management.call_command('runserver')
+    management.call_command('runserver', '0.0.0.0:8000')
 
 def export_answers(output_dir: str):
     existing_ids = [file.split('.')[0] for file in os.listdir(output_dir)]

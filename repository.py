@@ -84,11 +84,11 @@ def save_hit_type(params: dict):
 
 def get_active_hit_type_or_by_id(id: str=None)-> dict:
     if (id is not None):
-        result = DB.get().hit_types.find({'_id': id})
+        result = DB.get().hit_types.find({'_id': id, 'environment': Config.get('env_name')})
         logging.debug(f'Returning specific hit type with id {id}')
         return result.next()
     else:
-        result = list(DB.get().hit_types.find({'active': True}))
+        result = list(DB.get().hit_types.find({'active': True, 'environment': Config.get('env_name')}))
         if(len(result) > 1):
             logging.warning('DB has more than one active HIT type!')
         return result[0]
