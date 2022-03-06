@@ -1,3 +1,4 @@
+from collections import Counter
 import logging
 from typing import cast
 import coloredlogs
@@ -274,7 +275,10 @@ def fetch_hit_results():
                 operation_dict[page['_id']]['$push'] = {
                     'assignments': {'$each': parsed_assignments}
                 }
-    
+
+    status_counter = Counter(op['$set']['status'] for op in operation_dict.values())
+    status_counter[PageStatus.SUBMITTED] = nr_found_pages - len(operation_dict)
+    logging.info(f'Summary of submitted page statuses: {status_counter}')
     repository.update_pages_from_dict(operation_dict)
 
 def crop_compare_answers(answer_1_raw, answer_2_raw, page):
