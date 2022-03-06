@@ -166,7 +166,7 @@ def get_random_pages_by_status(statuses: list[PageStatus], count: int = None, id
     if(len(result) != 0):
         return result
     else:
-        raise LookupError(f'There are no more pages in any of these statuses: {statuses}!')
+        raise LookupError(f'There are no more pages in any of these statuses: {[status.value for status in statuses]}!')
 
 def get_pages_in_id_list(ids: list[str]) -> list[dict]:
     result = []

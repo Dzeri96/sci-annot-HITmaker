@@ -201,7 +201,8 @@ def publish(
     
     logging.info(f'Active hit type: {active_hit_type}')
     if str(Config.get('accept_prompts')) != 'True':
-        price = float(active_hit_type['reward']) * len(ids) * max_assignments
+        # Amazon MTurk takes a 20% cut per reward, but $0.01 is the minimum
+        price = (float(active_hit_type['reward']) + max(0.01, float(active_hit_type['reward'])*0.2)) * len(ids) * max_assignments
         answer = input(f'This action will cost you {price}$. Are you sure you want to proceed? (N/y)? ')
         if(answer != 'y'):
             print('Cancelling action...')
