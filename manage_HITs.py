@@ -371,7 +371,7 @@ def eval_retrieved():
 def start_server():
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'web.settings')
     application = get_wsgi_application()
-    management.call_command('runserver', '0.0.0.0:8000')
+    management.call_command('runserver')
 
 def export_answers(output_dir: str):
     existing_ids = [file.split('.')[0] for file in os.listdir(output_dir)]

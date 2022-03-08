@@ -5,6 +5,7 @@ from config import Config
 from pymongo import MongoClient, DESCENDING, ASCENDING, UpdateOne
 import pandas
 import logging
+from enums.assignment_status import AssignmentStatus
 from enums.page_status import PageStatus
 from enums.qualification_types import QualificationType
 import os
@@ -109,6 +110,16 @@ def update_pages_to_submitted(page_HIT_id_map: dict):
 
         logging.debug(f'Updated: {bulk_results.modified_count} document(s)')
 
+def update_assignment_statuses_from_dict(assignment_id_status_dict: dict[str, AssignmentStatus]):
+    if assignment_id_status_dict:
+        update_operations = [UpdateOne(
+            {'assignments': {'$exists': True}, 'assignments.assignment_id': assignment_id},
+            {'$set': {'assignments.$.reviewed': True, 'assignments.$.status': status.value}}
+        ) for assignment_id, status in assignment_id_status_dict.items()]
+        bulk_results = DB.get().pages.bulk_write(update_operations)
+        logging.debug(f'update_assignment_statuses_from_dict updated: {bulk_results.modified_count} document(s)')
+        return bulk_results
+
 def update_pages_from_dict(page_id_ops_dict: dict):
     if page_id_ops_dict:
         update_operations = [UpdateOne(
@@ -116,7 +127,7 @@ def update_pages_from_dict(page_id_ops_dict: dict):
             operations
         ) for page_id, operations in page_id_ops_dict.items()]
         bulk_results = DB.get().pages.bulk_write(update_operations)
-        logging.debug(f'Updated: {bulk_results.modified_count} document(s)')
+        logging.debug(f'update_pages_from_dict updated: {bulk_results.modified_count} document(s)')
         return bulk_results
 
 # TODO: Maybe consolidate with update_pages_from_dict
