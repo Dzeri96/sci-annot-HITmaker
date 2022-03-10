@@ -3,6 +3,7 @@ from config import Config
 import logging
 import json
 from urllib import parse
+from botocore.config import Config as BotoConfig
 
 from enums.qualification_types import QualificationType
 
@@ -22,6 +23,12 @@ class Client:
                 region_name=Config.get('region_name'),
                 aws_access_key_id=Config.get('aws_access_key_id'),
                 aws_secret_access_key=Config.get('aws_secret_access_key'),
+                config=BotoConfig(
+                    retries = {
+                        'max_attempts': 15,
+                        'mode': 'adaptive'
+                    }
+                )
             )
             return Client.__instance
 
