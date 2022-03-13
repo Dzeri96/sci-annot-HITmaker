@@ -92,6 +92,15 @@ if __name__ == '__main__':
     )
     export_answers_parser.add_argument('output_dir', metavar='PATH', help='Output directory')
 
+    compare_assignments_parser = subparsers.add_parser(
+        'compare-assignments',
+        description='Use the validation package to compare if two assignments match',
+        argument_default=argparse.SUPPRESS
+    )
+    compare_assignments_parser.add_argument('page_id', metavar='PAGE_ID', help='Page ID')
+    compare_assignments_parser.add_argument('assignment_1_id', metavar='ASSIG1_ID', help='Assignment 1 ID')
+    compare_assignments_parser.add_argument('assignment_2_id', metavar='ASSIG2_ID', help='Assignment 2 ID')
+
     args = parser.parse_args()
     
     # Initialize env variables in global config
@@ -289,13 +298,20 @@ def fetch_hit_results():
         logging.warning(f'{nr_feedback_messages} feedback message(s) received!')
     repository.update_pages_from_dict(operation_dict)
 
-def crop_compare_answers(answer_1_raw, answer_2_raw, page):
-    img_bytes = repository.get_image_as_bytes(page['id'])
+def crop_compare_answers(answer_1_raw, answer_2_raw, page_id, iou_threshold=0.95):
+    img_bytes = repository.get_image_as_bytes(page_id)
     answer_1_parsed = cast(list[AbsoluteBoundingBox], answer_parser.parse_dict(answer_1_raw, False))
     answer_1_parsed = helpers.make_relative(helpers.crop_all_to_content(img_bytes, answer_1_parsed), answer_1_raw['canvasWidth'], answer_1_raw['canvasHeight'])
     answer_2_parsed = cast(list[AbsoluteBoundingBox], answer_parser.parse_dict(answer_2_raw, False))
     answer_2_parsed = helpers.make_relative(helpers.crop_all_to_content(img_bytes, answer_2_parsed), answer_2_raw['canvasWidth'], answer_2_raw['canvasHeight'])
-    return evaluation.check_no_disagreements(answer_1_parsed, answer_2_parsed, 0.95)
+    return evaluation.check_no_disagreements(answer_1_parsed, answer_2_parsed, iou_threshold)
+
+def compare_assignments(page_id, assignment_1_id, assignment_2_id):
+    assignment_1 = repository.get_assignment(page_id, assignment_1_id)
+    assignment_2 = repository.get_assignment(page_id, assignment_2_id)
+    result = crop_compare_answers(assignment_1['answer'], assignment_2['answer'], page_id, 0.95)
+
+    print('Assignments match') if result else print('Assignments don\'t match')
 
 def eval_retrieved():
     repository.assert_qual_types_exist()
@@ -324,7 +340,7 @@ def eval_retrieved():
                         if worker_id not in worker_id_action_dict.keys():
                             worker_id_action_dict[worker_id] = {'$set': {'did_qualification_tasks': True}}
                         curr_answer_raw = assignment['answer']
-                        match = crop_compare_answers(ground_truth_raw, curr_answer_raw, page)
+                        match = crop_compare_answers(ground_truth_raw, curr_answer_raw, page['_id'])
                         if match:
                             worker_id_action_dict[worker_id]['$addToSet'] = {
                                 'qual_pages_completed': page['_id']
@@ -339,7 +355,7 @@ def eval_retrieved():
                     logging.warning(f'page {page["_id"]} has {len(assignments)} assignments! Only the last two will be evaluated')
                 answer_1_raw = page['assignments'][-2]['answer']
                 answer_2_raw = page['assignments'][-1]['answer']
-                match = crop_compare_answers(answer_1_raw, answer_2_raw, page)
+                match = crop_compare_answers(answer_1_raw, answer_2_raw, page['_id'])
 
                 if match:
                     logging.debug(f'page {page["_id"]} has matching annotations')
@@ -489,3 +505,5 @@ if __name__ == '__main__':
         create_hit_type(args.active)
     elif args.command == 'export-answers':
         export_answers(args.output_dir)
+    elif args.command == 'compare-assignments':
+        compare_assignments(args.page_id, args.assignment_1_id, args.assignment_2_id)

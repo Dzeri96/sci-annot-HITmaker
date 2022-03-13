@@ -388,6 +388,17 @@ class WorkerPointsBucket(NamedTuple):
 def get_worker_verification_points_distribution(nr_buckets= 10) -> list[WorkerPointsBucket]:
     min_max_res = DB.get().workers.aggregate([
         {
+            '$match': {
+                '$or': [
+                    {
+                        'env': None
+                    }, {
+                        'env': Config.get('env_name')
+                    }
+                ]
+            }
+        },
+        {
             '$group': {
                 'max': {
                     '$max': '$verification_points'
@@ -404,6 +415,17 @@ def get_worker_verification_points_distribution(nr_buckets= 10) -> list[WorkerPo
     bucket_boundaries = np.linspace(min_points, max_points+1, nr_buckets).tolist()
 
     bucket_response =  DB.get().workers.aggregate([
+        {
+            '$match': {
+                '$or': [
+                    {
+                        'env': None
+                    }, {
+                        'env': Config.get('env_name')
+                    }
+                ]
+            }
+        },
         {
             '$bucket': {
                 'groupBy': '$verification_points', 
