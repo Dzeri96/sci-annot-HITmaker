@@ -52,6 +52,22 @@
                             <img src="{% static 'web/images/chevron-right.svg'%}" alt="right arrow">
                         </button>
                     </form>
+                    <form method="post" action="{% rel_assignment_url page_id assignments.0.assignment_id %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="dummy_field" value="dummy_value">
+                        <input type="hidden" name="strict" value="true">
+                        <button type="submit" title="Approve left and reject others">
+                            <img src="{% static 'web/images/chevron-left-double.svg'%}" alt="double left arrow">
+                        </button>
+                    </form>
+                    <form method="post" action="{% rel_assignment_url page_id assignments.1.assignment_id %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="dummy_field" value="dummy_value">
+                        <input type="hidden" name="strict" value="true">
+                        <button type="submit" title="Approve right and reject others">
+                            <img src="{% static 'web/images/chevron-right-double.svg'%}" alt="double right arrow">
+                        </button>
+                    </form>
                 {% endif %}
                 <form method="post" action="{% rel_assignment_url page_id 'REJECT' %}">
                     {% csrf_token %}
@@ -65,8 +81,12 @@
                 </a>
             </div>
     {% else %}
-        <div class='central-error'>
-            <b>NO ASSIGNMENTS</b>
+        <div id='left-pane' class="pane">
+            {% assignment_url request.get_host page_id "LOCAL" as assig_url_encoded%}
+            <iframe
+                src="{{external_url}}?assignmentUrl={{assig_url_encoded}}&amp;image={{image_url_base}}{{page_id}}{{image_extension}}&amp;csrf_token={{csrf_token}}"
+                title="Right pane"
+            ></iframe>
         </div>
     {% endif %}
   </body>

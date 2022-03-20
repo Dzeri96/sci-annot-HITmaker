@@ -1,4 +1,5 @@
 from datetime import datetime
+from distutils.log import debug
 import logging
 from django.http import JsonResponse, Http404, QueryDict
 from django.http.response import HttpResponseRedirect
@@ -55,6 +56,46 @@ def index(request):
     }
     logging.debug(f'context: {context}')
     return render(request, 'web/index.html', context)
+
+
+def reject_unreviewed_assignments(page_id: str):
+    """Rejects all assignments of a page that don't have a "status" field.
+    This includes setting the qualification points appropriately.
+
+    Args:
+        page_id (str)
+    """
+    repository.assert_qual_types_exist()
+    qual_points_id = repository.get_qual_type_id(QualificationType.QUAL_POINTS)
+    # This is just to satisfy the type system.
+    # The assertion that these are not None is done at the beginning of the block.
+    if qual_points_id is not None:
+        rejection_candidate_assignments = repository.get_page_by_id(page_id)['assignments']
+        rejectable_assignments = [
+            assig for assig in rejection_candidate_assignments 
+            if 'status' not in assig
+        ]
+        logging.debug(f'rejecting unreviewed assignments: {[assig["assignment_id"] for assig in rejectable_assignments]}')
+        assignment_status_update_dict = {
+            assig['assignment_id']:AssignmentStatus.MANUALLY_REJECTED 
+            for assig in rejectable_assignments
+        }
+        for assignment in rejectable_assignments:
+            if datetime.now() < assignment['auto_approval_time']:
+                mturk_client.reject_assignment(assignment['assignment_id'])
+        workers_to_punish = [assignment['worker_id'] for assignment in rejectable_assignments]
+        worker_action_dict = {}
+        for worker_id in workers_to_punish:
+            worker_action_dict[worker_id] = \
+                {'$inc': {'verification_points': -int(Config.get('rejected_assignment_penalty'))}}
+        repository.update_workers_from_dict(worker_action_dict)
+        curr_worker_states = repository.get_workers_in_id_list(list(worker_action_dict.keys()))
+        for worker in curr_worker_states:
+            total_qual_points = worker['verification_points'] + \
+                (len(worker['qual_pages_completed']) if 'qual_pages_completed' in worker.keys()\
+                else 0)
+            mturk_client.assign_qualification_to_worker(qual_points_id, worker['_id'], total_qual_points)
+        repository.update_assignment_statuses_from_dict(page_id, assignment_status_update_dict)
 
 @method_decorator(csrf_exempt, name='dispatch')
 class Assignment(View):
@@ -128,7 +169,10 @@ class Assignment(View):
                         mturk_client.assign_qualification_to_worker(qual_points_id, worker_id, total_qual_points) 
                     if datetime.now() < assignment['auto_approval_time']:
                         mturk_client.approve_assignment(assignment_id)
-                    repository.update_assignment_statuses_from_dict({assignment['assignment_id']: AssignmentStatus.MANUALLY_ACCEPTED})
+                    repository.update_assignment_statuses_from_dict(page_id, {assignment_id: AssignmentStatus.MANUALLY_ACCEPTED})
+
+                    if "strict" in post_data.keys():
+                        reject_unreviewed_assignments(page_id)
                     
                 
             set_data['accepted_assignment_id'] = assignment_id
@@ -136,39 +180,7 @@ class Assignment(View):
                 page_id: update_data
             })
         else:
-            # Apply a penalty to the last two/one turker(s)
-            repository.assert_qual_types_exist()
-            qual_points_id = repository.get_qual_type_id(QualificationType.QUAL_POINTS)
-            # This is just to satisfy the type system.
-            # The assertion that these are not None is done at the beginning of the block.
-            if qual_points_id is not None:
-                rejection_candidate_assignments = repository.get_page_by_id(page_id)['assignments'][-2:]
-                rejectable_assignments = [
-                    assig for assig in rejection_candidate_assignments 
-                    if 'status' not in assig
-                ]
-                assignment_status_update_dict = {
-                    assig['assignment_id']:AssignmentStatus.MANUALLY_REJECTED 
-                    for assig in rejectable_assignments
-                }
-                for assignment in rejectable_assignments:
-                    if datetime.now() < assignment['auto_approval_time']:
-                        mturk_client.reject_assignment(assignment['assignment_id'])
-                workers_to_punish = [assignment['worker_id'] for assignment in rejectable_assignments]
-                worker_action_dict = {}
-                for worker_id in workers_to_punish:
-                    worker_action_dict[worker_id] = \
-                        {'$inc': {'verification_points': -int(Config.get('rejected_assignment_penalty'))}}
-                repository.update_workers_from_dict(worker_action_dict)
-                curr_worker_states = repository.get_workers_in_id_list(list(worker_action_dict.keys()))
-                for worker in curr_worker_states:
-                    total_qual_points = worker['verification_points'] + \
-                        (len(worker['qual_pages_completed']) if 'qual_pages_completed' in worker.keys()\
-                        else 0)
-                    mturk_client.assign_qualification_to_worker(qual_points_id, worker['_id'], total_qual_points)
-                repository.update_assignment_statuses_from_dict(assignment_status_update_dict)
-                
-
+            reject_unreviewed_assignments(page_id)
 
             update_resp = repository.update_pages_from_dict({
                 page_id: {
