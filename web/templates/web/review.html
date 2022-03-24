@@ -88,6 +88,11 @@
                 title="Right pane"
             ></iframe>
         </div>
+        <div id="control-box" class="{%if assignments.1%}double{%else%}single{%endif%}">
+            <a href="{% rel_simple_url '/review/' %}" title="Load new random">
+                <img src="{% static 'web/images/refresh.svg'%}" alt="refresh">
+            </a>
+        </div>
     {% endif %}
   </body>
 </html>
