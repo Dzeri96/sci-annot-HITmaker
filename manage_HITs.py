@@ -25,7 +25,8 @@ if __name__ == '__main__':
     )
     publish_random_parser.add_argument('count', help='Number of pages', metavar='COUNT', type=int)
     publish_random_parser.add_argument('--comment', '-c', help='Pass comment to created HIT that will be saved in the answer', metavar='COMMENT', type=str, required=False)
-    publish_random_parser.add_argument('--minimum-qual-points', '-m', help='The minimum number of qual. points that a turker needs in order to work on these HITs. (default is 0)', type=int, default=0)
+    publish_random_parser.add_argument('--minimum-qual-points', '-m', help='The minimum number of qual. points that a turker needs in order to work on these HITs. (default is no requirement)', type=int, default=0)
+    publish_random_parser.add_argument('--maximum-qual-points', help='The maximum number of qual. points that a turker needs in order to work on these HITs. (default is no requirement)', type=int, default=0)
     publish_random_parser.add_argument('--require-qualification-done', '-q', help='Indicates that turkers need to have done at least one qualification to work on these HITs.', action='store_true', default=False)
 
     publish_specific_parser = subparsers.add_parser(
@@ -36,6 +37,7 @@ if __name__ == '__main__':
     publish_specific_parser.add_argument('ids', metavar='IDs', nargs='+', help='Space-separated list of Page IDs to publish')
     publish_specific_parser.add_argument('--comment', '-c', help='Pass comment to created HIT that will be saved in the answer', metavar='COMMENT', type=str, required=False)
     publish_specific_parser.add_argument('--minimum-qual-points', '-m', help='The minimum number of qual. points that a turker needs in order to work on these HITs. (default is 0)', type=int, default=0)
+    publish_specific_parser.add_argument('--maximum-qual-points', help='The maximum number of qual. points that a turker needs in order to work on these HITs. (default is no requirement)', type=int, default=0)
     publish_specific_parser.add_argument('--require-qualification-done', '-q', help='Indicates that turkers need to have done at least one qualification to work on these HITs.', action='store_true', default=False)
 
     mark_for_qualification_parser = subparsers.add_parser(
@@ -163,7 +165,11 @@ def create_hit_type(active: bool = False):
     repository.save_hit_type(params)
     logging.info(f'Created HIT type with params: {params}')
 
-def create_postqual_requirements(minimum_qual_points: int= 0, did_qual_tasks_required: bool= False):
+def create_postqual_requirements(
+    minimum_qual_points: int= 0,
+    did_qual_tasks_required: bool= False,
+    maximum_qual_points: int = 0
+):
     repository.assert_qual_types_exist()
     qual_requirements = []
 
@@ -176,6 +182,18 @@ def create_postqual_requirements(minimum_qual_points: int= 0, did_qual_tasks_req
             'ActionsGuarded': 'DiscoverPreviewAndAccept',
             'IntegerValues': [
                 minimum_qual_points,
+            ]
+        })
+    
+    if maximum_qual_points > 0:
+        qual_points_id = repository.get_qual_type_id(QualificationType.QUAL_POINTS)
+        qual_requirements.append({
+            'QualificationTypeId': qual_points_id,
+            'Comparator': 'LessThanOrEqualTo',
+            'RequiredToPreview': True,
+            'ActionsGuarded': 'DiscoverPreviewAndAccept',
+            'IntegerValues': [
+                maximum_qual_points,
             ]
         })
 
@@ -194,10 +212,11 @@ def publish_random(
     count: int,
     comment: str = None,
     minimum_qual_points: int= 0,
-    did_qual_tasks_required: bool= False
+    did_qual_tasks_required: bool= False,
+    maximum_qual_points: int= 0
 ):
     unpublished = repository.get_random_pages_by_status([PageStatus.NOT_ANNOTATED], count, True)
-    qual_requirements = create_postqual_requirements(minimum_qual_points, did_qual_tasks_required)
+    qual_requirements = create_postqual_requirements(minimum_qual_points, did_qual_tasks_required, maximum_qual_points)
     publish([page['_id'] for page in unpublished], comment, qual_requirements= qual_requirements)
 
 def publish(
@@ -483,13 +502,18 @@ if __name__ == '__main__':
             args.count,
             comment,
             args.minimum_qual_points,
-            bool(args.require_qualification_done)
+            bool(args.require_qualification_done),
+            args.maximum_qual_points
         )
     elif args.command == 'publish-specific':
         comment = None
         if('comment' in args):
             comment = args.comment
-        qual_reqs = create_postqual_requirements(args.minimum_qual_points, args.require_qualification_done)
+        qual_reqs = create_postqual_requirements(
+            args.minimum_qual_points,
+            args.require_qualification_done,
+            args.maximum_qual_points
+        )
         publish(args.publish_specific, comment, qual_requirements=qual_reqs)
     elif args.command == 'create-qual-types':
         create_qual_types()
