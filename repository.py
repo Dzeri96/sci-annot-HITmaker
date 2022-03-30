@@ -1,4 +1,5 @@
 from collections import namedtuple
+from distutils.command.config import config
 from typing import Any, NamedTuple
 from pymongo.database import Database
 from config import Config
@@ -450,3 +451,48 @@ def get_worker_verification_points_distribution(nr_buckets= 10) -> list[WorkerPo
         count = bucket_begin_size_map[begin] if (begin in bucket_begin_size_map) else 0
         buckets.append(WorkerPointsBucket(begin, end, count))
     return buckets
+
+def get_workers_in_verification_point_range(
+    min: int,
+    max: int,
+    filter_env: bool = True
+) -> list[dict]:
+
+    and_part = []
+    or_part = [
+        {
+            'env': {
+                '$exists': 0
+            }
+        }, {
+            'env': Config.get('env_name')
+        }
+    ]
+
+    if min is not None:
+        and_part.append({
+            'verification_points': {
+                '$gte': min
+            }
+        })
+
+    if max is not None:
+        and_part.append({
+            'verification_points': {
+                '$lte': max
+            }
+        })
+    
+    aggregation_pipeline = [
+        {
+            '$match': { }
+        }
+    ]
+
+    if and_part:
+        aggregation_pipeline[0]['$match']['$and'] = and_part
+
+    if filter_env:
+        aggregation_pipeline[0]['$match']['$or'] = or_part
+
+    return list(DB.get().workers.aggregate(aggregation_pipeline))

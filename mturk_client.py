@@ -190,3 +190,17 @@ def reject_assignment(
         AssignmentId=assignment_id,
         RequesterFeedback=requester_feedback
     )
+
+def notify_workers(
+    subject: str,
+    message_text: str,
+    worker_ids: list[str]
+):
+    if(len(worker_ids)) and subject and message_text:
+        logging.info(f'Notifying {len(worker_ids)} worker(s) with subject "{subject}"')
+        response = Client.get().notify_workers(
+            Subject=subject,
+            MessageText=message_text,
+            WorkerIds=worker_ids
+        )
+        logging.debug(f'notify_workers response: {response}')

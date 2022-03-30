@@ -103,6 +103,25 @@ if __name__ == '__main__':
     compare_assignments_parser.add_argument('assignment_1_id', metavar='ASSIG1_ID', help='Assignment 1 ID')
     compare_assignments_parser.add_argument('assignment_2_id', metavar='ASSIG2_ID', help='Assignment 2 ID')
 
+    notify_specific_workers_parser = subparsers.add_parser(
+        'notify-specific-workers',
+        description='Send an email to a list of worker IDs',
+        argument_default=argparse.SUPPRESS
+    )
+    notify_specific_workers_parser.add_argument('worker_ids', metavar='IDs', nargs='+', help='Space-separated list of worker IDs to notify')
+    notify_specific_workers_parser.add_argument('subject', metavar='SUBJECT', help='Subject of the email')
+    notify_specific_workers_parser.add_argument('message_text', metavar='TEXT', help='Body of the email')
+
+    notify_workers_in_range_parser = subparsers.add_parser(
+        'notify-workers-in-range',
+        description='Send an email to workers whose verification points lie in the given range',
+        argument_default=argparse.SUPPRESS
+    )
+    notify_workers_in_range_parser.add_argument('subject', metavar='SUBJECT', help='Subject of the email')
+    notify_workers_in_range_parser.add_argument('message_text', metavar='TEXT', help='Body of the email')
+    notify_workers_in_range_parser.add_argument('--minimum-qual-points', '-m', help='The minimum number of qual. points that a turker needs in order to work on these HITs.', type=int)
+    notify_workers_in_range_parser.add_argument('--maximum-qual-points', help='The maximum number of qual. points that a turker needs in order to work on these HITs.', type=int)
+
     args = parser.parse_args()
     
     # Initialize env variables in global config
@@ -486,6 +505,28 @@ def pub_qual_pages(max_assignments: int = 10):
 
     publish(id_list, max_assignments= max_assignments, qual_requirements= qual_requirements)
     
+def notify_workers_in_range(subject: str, message_text: str, **kwargs):
+    """_summary_
+
+    Args:
+        subject (str): _description_
+        text (str): _description_
+        minimum_qual_points (int): Minimum qualification points of workers to notify
+        maximum_qual_points (int): Maximum qualification points of workers to notify
+    """
+
+    workers_in_range = repository.get_workers_in_verification_point_range(
+        kwargs.get('minimum_qual_points', None),
+        kwargs.get('maximum_qual_points', None)
+    )
+    
+    if len(workers_in_range) > 100:
+        # API limit
+        logging.error(f'Found {len(workers_in_range)} workers to notify, but the MTurk api only supports up to 100')
+        return
+
+    worker_ids = [worker['_id'] for worker in workers_in_range]
+    mturk_client.notify_workers(subject, message_text, worker_ids)
 
 if __name__ == '__main__':
     # Handle arguments            
@@ -531,3 +572,13 @@ if __name__ == '__main__':
         export_answers(args.output_dir)
     elif args.command == 'compare-assignments':
         compare_assignments(args.page_id, args.assignment_1_id, args.assignment_2_id)
+    elif args.command == 'notify-specific-workers':
+        mturk_client.notify_workers(args.subject, args.message_text, args.worker_ids)
+    elif args.command == 'notify-workers-in-range':
+        print(args)
+        range_args = {}
+        if 'minimum_qual_points' in args.__dict__.keys():
+            range_args['minimum_qual_points'] = args.minimum_qual_points
+        if 'maximum_qual_points' in args.__dict__.keys():
+            range_args['maximum_qual_points'] = args.maximum_qual_points
+        notify_workers_in_range(args.subject, args.message_text, **range_args)
