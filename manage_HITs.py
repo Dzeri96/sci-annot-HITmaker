@@ -6,6 +6,8 @@ import argparse
 import os
 import json
 from sci_annot_eval.common.bounding_box import AbsoluteBoundingBox
+from sci_annot_eval.exporters import sci_annot_exporter
+answer_exporter = sci_annot_exporter.SciAnnotExporter()
 
 from config import Config
 
@@ -93,6 +95,7 @@ if __name__ == '__main__':
         argument_default=argparse.SUPPRESS
     )
     export_answers_parser.add_argument('output_dir', metavar='PATH', help='Output directory')
+    export_answers_parser.add_argument('--crop-whitespace', '-c', action='store_true', help='Crop whitespace around bounding boxes')
 
     compare_assignments_parser = subparsers.add_parser(
         'compare-assignments',
@@ -427,21 +430,37 @@ def start_server():
     application = get_wsgi_application()
     management.call_command('runserver')
 
-def export_answers(output_dir: str):
+def export_answers(output_dir: str, crop_whitespace: bool):
+    logging.debug('Cropping whitespace in output...')
     existing_ids = [file.split('.')[0] for file in os.listdir(output_dir)]
-    accepted_assignments = repository.get_accepted_assignments(existing_ids)
+    accepted_page_assignments = repository.get_accepted_assignments(existing_ids)
     summary_dict = {}
 
     nr_files = 0
-    for assignment in accepted_assignments:
-        file_path = os.path.join(output_dir, assignment['_id']+'.json')
-        summary_dict[assignment['_id']] = [
-            assignment['status'],
-            assignment['assignment']['worker_id']
+    for page_assig in accepted_page_assignments:
+        logging.debug(f'Exporting page {page_assig["_id"]}')
+        if crop_whitespace:
+            assignment = page_assig['assignment']
+            orig_answer = assignment['answer']
+            orig_bboxes = answer_parser.parse_dict(orig_answer, False)
+            img_bytes = repository.get_image_as_bytes(page_assig['_id'])
+            # TODO: Remove the need for casting
+            cropped_bboxes = helpers.crop_all_to_content(img_bytes, cast(list[AbsoluteBoundingBox],orig_bboxes))
+            exported_annots = answer_exporter.export_to_dict(
+                cropped_bboxes,
+                int(orig_answer['canvasWidth']),
+                int(orig_answer['canvasHeight'])
+            )
+            orig_answer['annotations'] = exported_annots['annotations']
+        file_path = os.path.join(output_dir, page_assig['_id']+'.json')
+        summary_dict[page_assig['_id']] = [
+            page_assig['status'],
+            page_assig['assignment']['worker_id']
         ]
         with open(file_path, 'w+') as of:
-            json.dump(assignment['assignment']['answer'], of, indent=4)
+            json.dump(page_assig['assignment']['answer'], of, indent=4)
         nr_files+= 1
+        logging.debug(f'{nr_files}/??: page {page_assig["_id"]} saved')
     logging.info(f'Saved {nr_files} assignments to disk.')
 
     export_summary_path = os.path.join(output_dir, 'export_summary.parquet')
@@ -450,7 +469,6 @@ def export_answers(output_dir: str):
         new_summary_df = pd.DataFrame.from_dict(summary_dict, orient='index', columns=['status', 'worker_id'])
         summary_df = pd.read_parquet(export_summary_path)
         summary_df = new_summary_df.combine_first(summary_df)
-
     else:
         summary_df = pd.DataFrame.from_dict(summary_dict, orient='index', columns=['status', 'worker_id'])
     summary_df.to_parquet(export_summary_path)
@@ -569,7 +587,7 @@ if __name__ == '__main__':
     elif args.command == 'create-hit-type':
         create_hit_type(args.active)
     elif args.command == 'export-answers':
-        export_answers(args.output_dir)
+        export_answers(args.output_dir, args.crop_whitespace)
     elif args.command == 'compare-assignments':
         compare_assignments(args.page_id, args.assignment_1_id, args.assignment_2_id)
     elif args.command == 'notify-specific-workers':

@@ -259,6 +259,9 @@ def get_accepted_assignments(exclude_ids: list[str]):
                 }, 
                 'status': {
                     '$in': [PageStatus.REVIEWED.value, PageStatus.VERIFIED.value]
+                },
+                'group': {
+                    '$in': Config.get('active_page_groups')
                 }
             }
         }, {
