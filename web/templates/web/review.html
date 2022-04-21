@@ -32,7 +32,7 @@
                 ></iframe>
             </div>
         {% endif %}
-        <div id="control-box" class="{%if assignments.1%}double{%else%}single{%endif%}">
+        <div id="control-box" class="{%if assignments.1%}double{%else%}single{%endif%} {%if predictions%}hidden{%endif%}">
                 <form method="post" action="{% rel_assignment_url page_id assignments.0.assignment_id %}">
                     {% csrf_token %}
                     <input type="hidden" name="dummy_field" value="dummy_value">
