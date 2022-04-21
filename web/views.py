@@ -1,5 +1,6 @@
 from datetime import datetime
 from distutils.log import debug
+import json
 import logging
 from django.http import JsonResponse, Http404, QueryDict
 from django.http.response import HttpResponseRedirect
@@ -26,6 +27,7 @@ from sci_annot_eval.exporters import sci_annot_exporter
 from sci_annot_eval.helpers import helpers
 from typing import Any, cast
 from sci_annot_eval.common.bounding_box import AbsoluteBoundingBox
+import os
 answer_parser = sci_annot_parser.SciAnnotParser()
 answer_exporter = sci_annot_exporter.SciAnnotExporter()
 
@@ -101,9 +103,57 @@ def reject_unreviewed_assignments(page_id: str):
 class Assignment(View):
 
     def get(self, request, page_id: str, assignment_id: str):
+        """Either gets the assignment from the database, or turns a prediction file into a fake assignment
+        if assignment_id starts with "prediction_"
+
+        Args:
+            request (_type_): HTTP request.
+            page_id (str): ID of the page in format PDF_ID-PAGE_NR.
+            assignment_id (str): Either normal assignment id to be fetched from the db, or in format "prediction_folder_nr",
+            where folder_nr is the folder number from the prediction_fields in the .env file.
+
+        Raises:
+            Http404: If assignment is not found.
+
+        Returns:
+            _type_: JsonResponse of found/generated assignment.
+        """
         try:
+            if assignment_id.startswith('prediction_'):
+                # Generate fake assignment from local prediction file
+                folder_nr = int(assignment_id.split('_')[1])
+                pred_folder_specific = json.loads(Config.get("prediction_folders"))[folder_nr]
+                input_file = os.path.join(
+                    Config.get("prediction_folder_root"),
+                    pred_folder_specific,
+                    page_id + '.json'
+                )
+                logging.debug(f'{input_file=}')
+                if os.path.exists(input_file):
+                    with open(input_file, 'r') as file:
+                        parsed_prediction = json.load(file)
+                else:
+                    # Fake empty prediction
+                    parsed_prediction = {
+                        "appVersion": "NONE",
+                        "secondCounter": 0,
+                        "canvasHeight": 0,
+                        "canvasWidth": 0,
+                        "annotations": [],
+                        "comment": "NO PREDICTION"
+                    }
+
+                assignment = {
+                    'assignment_id': pred_folder_specific,
+                    'worker_id': 'PLACEHOLDER',
+                    'HIT_id': 'PLACEHOLDER',
+                    'answer': parsed_prediction
+                }
+            else:
+                # Fetch assignment from the database
+                assignment = repository.get_assignment(page_id, assignment_id)
+
             crop_whitespace = request.GET.__contains__('crop_whitespace')
-            assignment = repository.get_assignment(page_id, assignment_id)
             if(crop_whitespace):
                 orig_answer = assignment['answer']
                 orig_bboxes = answer_parser.parse_dict(orig_answer, False)
@@ -225,10 +275,34 @@ def review_page(request, page_id: str):
             'assignments': (page['assignments'][-2:] if 'assignments' in page else []),
             'page_id': page_id,
             'accepted_assignment_id': (page['accepted_assignment_id'] if 'accepted_assignment_id' in page.keys() else None),
-            'query_params': request.GET
+            'query_params': request.GET,
+            'predictions': False
         }
         return render(request, 'web/review.html', context)
     except LookupError as e:
         raise Http404(str(e))
 
-    
+def compare_predictions(request, page_id: str):
+    try:
+        left_folder_nr = request.GET.get('left_folder_nr', 0)
+        right_folder_nr = request.GET.get('right_folder_nr', 1)
+
+        page = repository.get_page_by_id(page_id)
+        context = {
+            'external_url': Config.get('external_url'),
+            'image_url_base': Config.get('image_url_base'),
+            'image_extension': Config.get('image_extension'),
+            # Small hack to re-use the existing review template.
+            # I know it's dirty don't hate!
+            'assignments': [
+                {'assignment_id': 'prediction_' + str(left_folder_nr)},
+                {'assignment_id': 'prediction_' + str(right_folder_nr)}
+            ],
+            'page_id': page_id,
+            'accepted_assignment_id': None,
+            'query_params': request.GET,
+            'predictions': True
+        }
+        return render(request, 'web/review.html', context)
+    except LookupError as e:
+        raise Http404(str(e))
