@@ -36,5 +36,4 @@ These parameters change the behavior of the front-end:
 ## TODO
 - Write about the security implications of using XML parsers, and how MTurk requesters' servers could be prime targets.
 They have money after all
-
 - Implement race condition handling in the API
