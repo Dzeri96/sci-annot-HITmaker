@@ -1,6 +1,6 @@
 from collections import Counter
 import logging
-from typing import cast
+from typing import cast, Optional
 import coloredlogs
 import argparse
 import os
@@ -232,7 +232,7 @@ def create_postqual_requirements(
 
 def publish_random(
     count: int,
-    comment: str = None,
+    comment: Optional[str] = None,
     minimum_qual_points: int= 0,
     did_qual_tasks_required: bool= False,
     maximum_qual_points: int= 0
@@ -243,7 +243,7 @@ def publish_random(
 
 def publish(
     ids: list[str],
-    comment: str = None,
+    comment: Optional[str] = None,
     max_assignments: int = int(Config.get('max_assignments')),
     qual_requirements: list = []
 ):
@@ -341,9 +341,10 @@ def fetch_hit_results():
 
 def crop_compare_answers(answer_1_raw, answer_2_raw, page_id, iou_threshold=0.95):
     img_bytes = repository.get_image_as_bytes(page_id)
-    answer_1_parsed = cast(list[AbsoluteBoundingBox], answer_parser.parse_dict(answer_1_raw, False))
+    answer_1_parsed = answer_parser.parse_dict_absolute(answer_1_raw)
+    # TODO: Clean this up
     answer_1_parsed = helpers.make_relative(helpers.crop_all_to_content(img_bytes, answer_1_parsed), answer_1_raw['canvasWidth'], answer_1_raw['canvasHeight'])
-    answer_2_parsed = cast(list[AbsoluteBoundingBox], answer_parser.parse_dict(answer_2_raw, False))
+    answer_2_parsed = answer_parser.parse_dict_absolute(answer_2_raw)
     answer_2_parsed = helpers.make_relative(helpers.crop_all_to_content(img_bytes, answer_2_parsed), answer_2_raw['canvasWidth'], answer_2_raw['canvasHeight'])
     return evaluation.check_no_disagreements(answer_1_parsed, answer_2_parsed, iou_threshold)
 
@@ -442,12 +443,16 @@ def export_answers(output_dir: str, crop_whitespace: bool):
         if crop_whitespace:
             assignment = page_assig['assignment']
             orig_answer = assignment['answer']
-            orig_bboxes = answer_parser.parse_dict(orig_answer, False)
+            orig_bboxes = answer_parser.parse_dict_absolute(orig_answer)
             img_bytes = repository.get_image_as_bytes(page_assig['_id'])
-            # TODO: Remove the need for casting
-            cropped_bboxes = helpers.crop_all_to_content(img_bytes, cast(list[AbsoluteBoundingBox],orig_bboxes))
-            exported_annots = answer_exporter.export_to_dict(
+            cropped_bboxes = helpers.crop_all_to_content(img_bytes, orig_bboxes)
+            relative_cropped_bboxes = helpers.make_relative(
                 cropped_bboxes,
+                int(orig_answer['canvasWidth']),
+                int(orig_answer['canvasHeight'])
+            )
+            exported_annots = answer_exporter.export_to_dict(
+                relative_cropped_bboxes,
                 int(orig_answer['canvasWidth']),
                 int(orig_answer['canvasHeight'])
             )

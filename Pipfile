@@ -11,11 +11,12 @@ coloredlogs = "*"
 pandas = "*"
 pyarrow = "*"
 defusedxml = "*"
-sci-annot-eval = {editable = true, path = "./../../validation"}
+sci-annot-eval = "==0.0.8"
 django = "*"
 django-cors-headers = "*"
 faker = "*"
 opencv-python = "*"
+numpy = "*"
 
 [dev-packages]
 

@@ -4,6 +4,7 @@ import logging
 import json
 from urllib import parse
 from botocore.config import Config as BotoConfig
+from typing import Optional
 
 from enums.qualification_types import QualificationType
 
@@ -60,7 +61,7 @@ def create_hit_type (
 def create_hit(
     hit_type: dict,
     image_url: str,
-    comment: str = None,
+    comment: Optional[str] = None,
     max_assignments: int = int(Config.get('max_assignments')),
     qualification_requirements: list = []
 ):
@@ -99,7 +100,7 @@ def create_hit(
 def create_hit_with_hit_type(
     type_id: str,
     image_url: str,
-    comment: str = None,
+    comment: Optional[str] = None,
     max_assignments: int = int(Config.get('max_assignments')),
 ):
     external_url = Config.get('external_url')
@@ -154,7 +155,7 @@ def create_qual_type(qual: QualificationType) -> dict:
 def assign_qualification_to_worker(
     qual_id: str,
     worker_id: str,
-    integer_value: int = None,
+    integer_value: Optional[int] = None,
     send_notification: bool = False
 ):
     args = {
